@@ -2,6 +2,8 @@
 
 A simple CLI todo application written in Go that uses sqlite3 for task management.
 
+![Screenshot](/media/screenshot.png)
+
 ## Features
 
 - Simple, clean user interface using bubbletea and lipgloss

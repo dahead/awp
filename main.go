@@ -126,7 +126,7 @@ var keys = defaultKeyMap()
 
 func main() {
 	// Parse command line flags
-	dbPath := flag.String("database", "", "Path to PostgreSQL database file")
+	dbPath := flag.String("database", "", "Path to database file")
 	flag.Parse()
 
 	// Load configuration
@@ -278,7 +278,7 @@ func initialModel(db *sql.DB) Model {
 	tagsInput := textinput.New()
 	tagsInput.Placeholder = "Tags (comma separated)"
 	tagsInput.Width = 40
-	
+
 	// Initialize due date input with today's date as default
 	dueDateInput := textinput.New()
 	dueDateInput.Placeholder = "Due Date (YYYY-MM-DD, optional)"
@@ -310,7 +310,7 @@ func (m *Model) resetInputs() {
 	m.tagsInput.Reset()
 	// Set due date input to today's date
 	m.dueDateInput.SetValue(time.Now().Format("2006-01-02"))
-	
+
 	m.activeInput = 0
 	m.titleInput.Focus()
 	m.descInput.Blur()
@@ -390,7 +390,7 @@ func (m *Model) submitForm() {
 			Description: desc,
 			Tags:        cleanedTags,
 		}
-		
+
 		// Insert new task using the database function
 		err := addTask(m.db, task)
 		if err != nil {
@@ -406,7 +406,7 @@ func (m *Model) submitForm() {
 			m.editingItem.Description = desc
 			m.editingItem.Tags = cleanedTags
 			m.editingItem.DueDate = parsedDueDate
-			
+
 			// Update using the database function
 			err := updateTask(m.db, *m.editingItem)
 			if err != nil {
@@ -603,7 +603,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.titleInput.SetValue(m.editingItem.Title)
 					m.descInput.SetValue(m.editingItem.Description)
 					m.tagsInput.SetValue(strings.Join(m.editingItem.Tags, ", "))
-					
+
 					// Format and set due date
 					if !m.editingItem.DueDate.IsZero() {
 						m.dueDateInput.SetValue(m.editingItem.DueDate.Format("2006-01-02"))
@@ -774,7 +774,7 @@ func (m Model) renderForm() string {
 	sb.WriteString("Tags (comma separated):\n")
 	sb.WriteString(m.tagsInput.View())
 	sb.WriteString("\n\n")
-	
+
 	// Due date input
 	sb.WriteString("Due Date (YYYY-MM-DD):\n")
 	sb.WriteString(m.dueDateInput.View())
