@@ -55,6 +55,10 @@ type Model struct {
 	width, height int
 	err           error
 
+	// View state
+	showAllTasks bool
+	viewDate     time.Time
+
 	// Form state
 	mode         InputMode
 	titleInput   textinput.Model
@@ -91,6 +95,9 @@ type keyMap struct {
 	AddTask            key.Binding
 	EditTask           key.Binding
 	DeleteTask         key.Binding
+	ToggleViewMode     key.Binding
+	PrevDay            key.Binding
+	NextDay            key.Binding
 }
 
 func defaultKeyMap() keyMap {
@@ -118,6 +125,18 @@ func defaultKeyMap() keyMap {
 		DeleteTask: key.NewBinding(
 			key.WithKeys("d"),
 			key.WithHelp("d", "delete task"),
+		),
+		ToggleViewMode: key.NewBinding(
+			key.WithKeys("ctrl+v"),
+			key.WithHelp("ctrl+v", "toggle between today's tasks and all tasks"),
+		),
+		PrevDay: key.NewBinding(
+			key.WithKeys("ctrl+left"),
+			key.WithHelp("ctrl+←", "previous day"),
+		),
+		NextDay: key.NewBinding(
+			key.WithKeys("ctrl+right"),
+			key.WithHelp("ctrl+→", "next day"),
 		),
 	}
 }
@@ -295,6 +314,8 @@ func initialModel(db *sql.DB) Model {
 		tagsInput:    tagsInput,
 		dueDateInput: dueDateInput,
 		activeInput:  0,
+		showAllTasks: false,
+		viewDate:     time.Now(),
 	}
 
 	// Load initial data
@@ -515,9 +536,19 @@ func deleteTask(db *sql.DB, id int) error {
 }
 
 // Model methods that use the database functions
-func (m *Model) loadTodaysTasks() {
-	// Filter tasks where due date is today
-	items, err := loadTasks(m.db, "date(duedate) = date('now')")
+func (m *Model) loadTasks() {
+	var items []TodoItem
+	var err error
+
+	if m.showAllTasks {
+		// Show all tasks
+		items, err = loadTasks(m.db, "")
+	} else {
+		// Show tasks for specific date
+		dateStr := m.viewDate.Format("2006-01-02")
+		items, err = loadTasks(m.db, fmt.Sprintf("date(duedate) = date('%s')", dateStr))
+	}
+
 	if err != nil {
 		m.err = err
 		return
@@ -543,6 +574,13 @@ func (m *Model) loadTodaysTasks() {
 	}
 
 	m.table.SetRows(tableRows)
+}
+
+// For backward compatibility
+func (m *Model) loadTodaysTasks() {
+	m.viewDate = time.Now()
+	m.showAllTasks = false
+	m.loadTasks()
 }
 
 func (m Model) Init() tea.Cmd {
@@ -614,6 +652,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if len(m.items) > 0 && m.table.Cursor() < len(m.items) {
 					m.mode = DeleteConfirmMode
 					m.editingItem = &m.items[m.table.Cursor()]
+				}
+
+			case key.Matches(msg, keys.ToggleViewMode):
+				m.showAllTasks = !m.showAllTasks
+				m.loadTasks()
+
+			case key.Matches(msg, keys.PrevDay):
+				if !m.showAllTasks {
+					m.viewDate = m.viewDate.AddDate(0, 0, -1)
+					m.loadTasks()
+				}
+
+			case key.Matches(msg, keys.NextDay):
+				if !m.showAllTasks {
+					m.viewDate = m.viewDate.AddDate(0, 0, 1)
+					m.loadTasks()
 				}
 			}
 
@@ -702,7 +756,17 @@ func (m Model) View() string {
 	case NormalMode:
 		// Table with tasks
 		sb.WriteString(baseStyle.Render(m.table.View()))
-		sb.WriteString("\n\n")
+		sb.WriteString("\n")
+
+		// Display view mode and date
+		viewInfo := ""
+		if m.showAllTasks {
+			viewInfo = "Showing all tasks"
+		} else {
+			viewInfo = fmt.Sprintf("Showing tasks due on %s", m.viewDate.Format("2006-01-02"))
+		}
+		sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("86")).Render(viewInfo))
+		sb.WriteString("\n")
 
 		// Status bar / commands (only shown when showCommands is true)
 		if m.showCommands {
@@ -713,6 +777,12 @@ func (m Model) View() string {
 				"e: edit task",
 				"d: delete task",
 			}
+
+			// Only show day navigation commands when not in "show all" mode
+			if !m.showAllTasks {
+				commands = append(commands, "ctrl+←: previous day", "ctrl+→: next day")
+			}
+
 			sb.WriteString(statusBar.Render(strings.Join(commands, " | ")))
 		}
 

@@ -7,8 +7,9 @@ A simple CLI todo application written in Go that uses sqlite3 for task managemen
 ## Features
 
 - Simple, clean user interface using bubbletea and lipgloss
-- Shows only today's tasks
-- Stores data in a PostgreSQL database
+- Shows today's tasks by default, with option to view all tasks
+- Date navigation to view tasks due on specific days
+- Stores data in a SQLite database
 - Central hotkey (CTRL+B) to show additional commands
 - Full CRUD operations for managing tasks
 
@@ -56,7 +57,7 @@ The application can be configured in two ways:
 
 ## Database
 
-The application uses PostgreSQL to store task data. The default database name is `todo.db`. 
+The application uses SQLite to store task data. The default database name is `todo.db`. 
 
 The schema includes a `todos` table with the following columns:
 - `id`: Serial primary key
@@ -79,8 +80,11 @@ The application has a simple, clean interface:
   - q: Quit the application
   - t: Toggle task status
   - a: Add a new task
+  - A: Toggle between today's tasks and all tasks
   - e: Edit the selected task
   - d: Delete the selected task
+  - ctrl+←: View tasks due on the previous day
+  - ctrl+→: View tasks due on the next day
 
 ## Development
 
