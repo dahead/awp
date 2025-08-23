@@ -9,6 +9,8 @@ A simple CLI todo application written in Go that uses sqlite3 for task managemen
 - Simple, clean user interface using bubbletea and lipgloss
 - Shows today's tasks by default, with option to view all tasks
 - Date navigation to view tasks due on specific days
+- Filtering capabilities to show only done or undone tasks
+- Search functionality to find specific tasks
 - Stores data in a SQLite database
 - Central hotkey (CTRL+B) to show additional commands
 - Full CRUD operations for managing tasks
@@ -83,6 +85,9 @@ The application has a simple, clean interface:
   - e: Edit the selected task
   - d: Delete the selected task
   - ctrl+v: Toggle between today's tasks and all tasks
+  - ctrl+d: Show only done tasks
+  - ctrl+u: Show only undone tasks
+  - ctrl+f: Search tasks
   - ctrl+←: View tasks due on the previous day
   - ctrl+→: View tasks due on the next day
 
