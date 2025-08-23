@@ -44,6 +44,24 @@ const (
 	AddMode
 	EditMode
 	DeleteConfirmMode
+	SearchMode
+)
+
+// ViewMode represents the current view mode for tasks
+type ViewMode int
+
+const (
+	TodayViewMode ViewMode = iota // Default - show tasks for today
+	AllViewMode                   // Show all tasks (no date filter)
+)
+
+// TaskFilter represents the current task filter mode
+type TaskFilter int
+
+const (
+	AllTasksFilter    TaskFilter = iota // Show all tasks regardless of status
+	DoneTasksFilter                     // Show only completed tasks
+	UndoneTasksFilter                   // Show only uncompleted tasks
 )
 
 // Model represents the application state
@@ -56,8 +74,11 @@ type Model struct {
 	err           error
 
 	// View state
-	showAllTasks bool
+	viewMode     ViewMode
+	taskFilter   TaskFilter
+	showAllTasks bool // For backward compatibility, will be removed later
 	viewDate     time.Time
+	searchTerm   string // For search functionality
 
 	// Form state
 	mode         InputMode
@@ -65,6 +86,7 @@ type Model struct {
 	descInput    textinput.Model
 	tagsInput    textinput.Model
 	dueDateInput textinput.Model
+	searchInput  textinput.Model // For search functionality
 	activeInput  int
 
 	// Edit/delete state
@@ -96,6 +118,9 @@ type keyMap struct {
 	EditTask           key.Binding
 	DeleteTask         key.Binding
 	ToggleViewMode     key.Binding
+	ShowDoneTasks      key.Binding
+	ShowUndoneTasks    key.Binding
+	SearchTasks        key.Binding
 	PrevDay            key.Binding
 	NextDay            key.Binding
 }
@@ -129,6 +154,18 @@ func defaultKeyMap() keyMap {
 		ToggleViewMode: key.NewBinding(
 			key.WithKeys("ctrl+v"),
 			key.WithHelp("ctrl+v", "toggle between today's tasks and all tasks"),
+		),
+		ShowDoneTasks: key.NewBinding(
+			key.WithKeys("ctrl+d"),
+			key.WithHelp("ctrl+d", "show only done tasks"),
+		),
+		ShowUndoneTasks: key.NewBinding(
+			key.WithKeys("ctrl+u"),
+			key.WithHelp("ctrl+u", "show only undone tasks"),
+		),
+		SearchTasks: key.NewBinding(
+			key.WithKeys("ctrl+f"),
+			key.WithHelp("ctrl+f", "search tasks"),
 		),
 		PrevDay: key.NewBinding(
 			key.WithKeys("ctrl+left"),
@@ -304,6 +341,12 @@ func initialModel(db *sql.DB) Model {
 	dueDateInput.Width = 40
 	dueDateInput.SetValue(time.Now().Format("2006-01-02"))
 
+	// Initialize search input
+	searchInput := textinput.New()
+	searchInput.Placeholder = "Search tasks by title or description"
+	searchInput.Focus()
+	searchInput.Width = 40
+
 	m := Model{
 		table:        t,
 		db:           db,
@@ -313,9 +356,13 @@ func initialModel(db *sql.DB) Model {
 		descInput:    descInput,
 		tagsInput:    tagsInput,
 		dueDateInput: dueDateInput,
+		searchInput:  searchInput,
 		activeInput:  0,
-		showAllTasks: false,
+		viewMode:     TodayViewMode,  // Default view mode shows today's tasks
+		taskFilter:   AllTasksFilter, // Default to showing all tasks (both done and undone)
+		showAllTasks: false,          // Keep for backward compatibility
 		viewDate:     time.Now(),
+		searchTerm:   "", // Initialize empty search term
 	}
 
 	// Load initial data
@@ -539,15 +586,52 @@ func deleteTask(db *sql.DB, id int) error {
 func (m *Model) loadTasks() {
 	var items []TodoItem
 	var err error
+	var whereClause string
 
-	if m.showAllTasks {
-		// Show all tasks
-		items, err = loadTasks(m.db, "")
-	} else {
+	// First, set up the date part of the where clause based on view mode
+	switch m.viewMode {
+	case AllViewMode:
+		// Show all tasks (no date filter)
+		whereClause = ""
+		m.showAllTasks = true // For backward compatibility
+	case TodayViewMode:
 		// Show tasks for specific date
 		dateStr := m.viewDate.Format("2006-01-02")
-		items, err = loadTasks(m.db, fmt.Sprintf("date(duedate) = date('%s')", dateStr))
+		whereClause = fmt.Sprintf("date(duedate) = date('%s')", dateStr)
+		m.showAllTasks = false // For backward compatibility
 	}
+
+	// Then, add the status part of the where clause based on task filter
+	switch m.taskFilter {
+	case AllTasksFilter:
+		// No additional filter needed
+	case DoneTasksFilter:
+		if whereClause == "" {
+			whereClause = "status = 1" // SQLite uses 1 for true
+		} else {
+			whereClause = whereClause + " AND status = 1"
+		}
+	case UndoneTasksFilter:
+		if whereClause == "" {
+			whereClause = "status = 0" // SQLite uses 0 for false
+		} else {
+			whereClause = whereClause + " AND status = 0"
+		}
+	}
+
+	// Finally, add search term filter if one is set
+	if m.searchTerm != "" {
+		searchClause := fmt.Sprintf("(title LIKE '%%%s%%' OR description LIKE '%%%s%%')",
+			m.searchTerm, m.searchTerm)
+		if whereClause == "" {
+			whereClause = searchClause
+		} else {
+			whereClause = whereClause + " AND " + searchClause
+		}
+	}
+
+	// Load the tasks with the combined where clause
+	items, err = loadTasks(m.db, whereClause)
 
 	if err != nil {
 		m.err = err
@@ -579,7 +663,7 @@ func (m *Model) loadTasks() {
 // For backward compatibility
 func (m *Model) loadTodaysTasks() {
 	m.viewDate = time.Now()
-	m.showAllTasks = false
+	m.viewMode = TodayViewMode
 	m.loadTasks()
 }
 
@@ -655,20 +739,50 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 
 			case key.Matches(msg, keys.ToggleViewMode):
-				m.showAllTasks = !m.showAllTasks
+				// Toggle between today's tasks and all tasks
+				if m.viewMode == TodayViewMode {
+					m.viewMode = AllViewMode
+				} else {
+					m.viewMode = TodayViewMode
+				}
 				m.loadTasks()
 
 			case key.Matches(msg, keys.PrevDay):
-				if !m.showAllTasks {
+				if m.viewMode == TodayViewMode {
 					m.viewDate = m.viewDate.AddDate(0, 0, -1)
 					m.loadTasks()
 				}
 
 			case key.Matches(msg, keys.NextDay):
-				if !m.showAllTasks {
+				if m.viewMode == TodayViewMode {
 					m.viewDate = m.viewDate.AddDate(0, 0, 1)
 					m.loadTasks()
 				}
+
+			case key.Matches(msg, keys.ShowDoneTasks):
+				// Toggle between done tasks and all tasks
+				if m.taskFilter == DoneTasksFilter {
+					m.taskFilter = AllTasksFilter
+				} else {
+					m.taskFilter = DoneTasksFilter
+				}
+				m.loadTasks()
+
+			case key.Matches(msg, keys.ShowUndoneTasks):
+				// Toggle between undone tasks and all tasks
+				if m.taskFilter == UndoneTasksFilter {
+					m.taskFilter = AllTasksFilter
+				} else {
+					m.taskFilter = UndoneTasksFilter
+				}
+				m.loadTasks()
+
+			case key.Matches(msg, keys.SearchTasks):
+				// Enter search mode
+				m.mode = SearchMode
+				m.searchInput.Focus()
+				m.searchInput.SetValue("") // Clear previous search
+				return m, nil
 			}
 
 		case AddMode, EditMode:
@@ -705,6 +819,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.dueDateInput, cmd = m.dueDateInput.Update(msg)
 				cmds = append(cmds, cmd)
 			}
+
+		case SearchMode:
+			// Handle search mode key presses
+			switch msg.String() {
+			case "esc":
+				// Exit search mode
+				m.mode = NormalMode
+				m.searchTerm = ""
+				m.loadTasks()
+
+			case "enter":
+				// Perform search
+				m.searchTerm = m.searchInput.Value()
+				m.mode = NormalMode
+				m.loadTasks()
+			}
+
+			// Update search input
+			m.searchInput, cmd = m.searchInput.Update(msg)
+			cmds = append(cmds, cmd)
 
 		case DeleteConfirmMode:
 			// Handle delete confirmation
@@ -760,11 +894,29 @@ func (m Model) View() string {
 
 		// Display view mode and date
 		viewInfo := ""
-		if m.showAllTasks {
-			viewInfo = "Showing all tasks"
-		} else {
-			viewInfo = fmt.Sprintf("Showing tasks due on %s", m.viewDate.Format("2006-01-02"))
+
+		// Build the view mode part
+		var viewModePart string
+		switch m.viewMode {
+		case AllViewMode:
+			viewModePart = "all tasks"
+		case TodayViewMode:
+			viewModePart = fmt.Sprintf("tasks due on %s", m.viewDate.Format("2006-01-02"))
 		}
+
+		// Build the filter part
+		var filterPart string
+		switch m.taskFilter {
+		case AllTasksFilter:
+			filterPart = "" // No special message for all tasks
+		case DoneTasksFilter:
+			filterPart = " (completed only)"
+		case UndoneTasksFilter:
+			filterPart = " (pending only)"
+		}
+
+		// Combine the parts
+		viewInfo = fmt.Sprintf("Showing %s%s", viewModePart, filterPart)
 		sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("86")).Render(viewInfo))
 		sb.WriteString("\n")
 
@@ -776,10 +928,14 @@ func (m Model) View() string {
 				"a: add task",
 				"e: edit task",
 				"d: delete task",
+				"ctrl+v: toggle view mode",
+				"ctrl+d: show done tasks",
+				"ctrl+u: show undone tasks",
+				"ctrl+f: search tasks",
 			}
 
-			// Only show day navigation commands when not in "show all" mode
-			if !m.showAllTasks {
+			// Only show day navigation commands when in today view mode
+			if m.viewMode == TodayViewMode {
 				commands = append(commands, "ctrl+←: previous day", "ctrl+→: next day")
 			}
 
@@ -811,6 +967,15 @@ func (m Model) View() string {
 			sb.WriteString("\n")
 			sb.WriteString(lipgloss.NewStyle().Bold(true).Render("Press Y to confirm, N to cancel"))
 		}
+
+	case SearchMode:
+		sb.WriteString(lipgloss.NewStyle().Bold(true).Render("Search Tasks"))
+		sb.WriteString("\n\n")
+		sb.WriteString("Enter search term to find tasks by title or description:")
+		sb.WriteString("\n\n")
+		sb.WriteString(m.searchInput.View())
+		sb.WriteString("\n\n")
+		sb.WriteString(statusBar.Render("Enter: search • Esc: cancel"))
 	}
 
 	// Error message if any

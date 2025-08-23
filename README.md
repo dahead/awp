@@ -80,9 +80,9 @@ The application has a simple, clean interface:
   - q: Quit the application
   - t: Toggle task status
   - a: Add a new task
-  - A: Toggle between today's tasks and all tasks
   - e: Edit the selected task
   - d: Delete the selected task
+  - ctrl+v: Toggle between today's tasks and all tasks
   - ctrl+←: View tasks due on the previous day
   - ctrl+→: View tasks due on the next day
 
