@@ -48,6 +48,7 @@ The application can be configured in two ways:
    - `--database`: Path to the PostgreSQL database
 
 2. Configuration file:
+```
    - A `config.json` file located at `/home/users/.config/awp/config`
    - Example configuration:
      ```json
@@ -69,7 +70,7 @@ The application can be configured in two ways:
         "NextDay": "[\"ctrl+right\", \"right\", \"l\"]"
         }
     }
-     ```
+ ```
 
 ## Database
 
