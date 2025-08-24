@@ -18,6 +18,31 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
+// Color constants for consistent styling across the application
+const (
+	// UI element colors
+	ColorBorder     = "240" // Border color for UI elements
+	ColorBackground = "237" // Background color for status bar
+	ColorAccent     = "205" // Pink accent color used in multiple places
+
+	// Text colors
+	ColorNormalText   = "86"  // Cyan text for help and view info
+	ColorSelectedText = "229" // Yellow text for selected items
+	ColorSelectedBg   = "57"  // Blue background for selected items
+	ColorError        = "9"   // Red text for error/delete messages
+
+	// Calendar specific colors
+	ColorWeekend     = "240" // Gray color for weekend days
+	ColorPastTasks   = "62"  // Muted blue for past tasks
+	ColorFutureTasks = "83"  // Green for future tasks
+	ColorTodayBg     = "205" // Same as accent color
+	ColorTodayText   = "0"   // Black text on today's highlight
+
+	// Project and context tag colors
+	ColorProject = "2" // Green for project tags
+	ColorContext = "4" // Blue for context tags
+)
+
 // Config holds the application configuration
 type Config struct {
 	Database      string            `json:"database"`
@@ -85,9 +110,6 @@ type Model struct {
 	viewDate   time.Time
 	searchTerm string // For search functionality
 
-	// Calendar view
-	calendar CalendarModel
-
 	// Form state
 	mode         InputMode
 	titleInput   textinput.Model
@@ -104,11 +126,11 @@ type Model struct {
 var (
 	baseStyle = lipgloss.NewStyle().
 			BorderStyle(lipgloss.NormalBorder()).
-			BorderForeground(lipgloss.Color("240"))
+			BorderForeground(lipgloss.Color(ColorBorder))
 
 	statusBar = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("205")).
-			Background(lipgloss.Color("237")).
+			Foreground(lipgloss.Color(ColorAccent)).
+			Background(lipgloss.Color(ColorBackground)).
 			Padding(0, 1)
 )
 
@@ -128,9 +150,7 @@ type keyMap struct {
 	NextDay            key.Binding
 	PrevDayWithTasks   key.Binding
 	NextDayWithTasks   key.Binding
-	ToggleCalendarView key.Binding
-	PrevMonth          key.Binding
-	NextMonth          key.Binding
+	JumpToToday        key.Binding
 }
 
 func defaultKeyMap() keyMap {
@@ -191,17 +211,9 @@ func defaultKeyMap() keyMap {
 			key.WithKeys("ctrl+shift+right"),
 			key.WithHelp("ctrl+shift+→", "next day with tasks"),
 		),
-		ToggleCalendarView: key.NewBinding(
-			key.WithKeys("ctrl+p"),
-			key.WithHelp("ctrl+p", "toggle calendar view"),
-		),
-		PrevMonth: key.NewBinding(
-			key.WithKeys("ctrl+["),
-			key.WithHelp("ctrl+[", "previous month"),
-		),
-		NextMonth: key.NewBinding(
-			key.WithKeys("ctrl+]"),
-			key.WithHelp("ctrl+]", "next month"),
+		JumpToToday: key.NewBinding( // New key binding
+			key.WithKeys("h"),
+			key.WithHelp("h", "jump to today"),
 		),
 	}
 }
@@ -224,9 +236,7 @@ func configuredKeyMap(config Config) keyMap {
 		NextDay:            parseKeyBinding(config.KeyMap["NextDay"], "ctrl+right", "next day"),
 		PrevDayWithTasks:   parseKeyBinding(config.KeyMap["PrevDayWithTasks"], "ctrl+shift+left", "previous day with tasks"),
 		NextDayWithTasks:   parseKeyBinding(config.KeyMap["NextDayWithTasks"], "ctrl+shift+right", "next day with tasks"),
-		ToggleCalendarView: parseKeyBinding(config.KeyMap["ToggleCalendarView"], "ctrl+p", "toggle calendar view"),
-		PrevMonth:          parseKeyBinding(config.KeyMap["PrevMonth"], "ctrl+[", "previous month"),
-		NextMonth:          parseKeyBinding(config.KeyMap["NextMonth"], "ctrl+]", "next month"),
+		JumpToToday:        parseKeyBinding(config.KeyMap["JumpToToday"], "ctrl+shift+right", "next day with tasks"),
 	}
 	log("Finished parsing key bindings")
 	return km
@@ -413,6 +423,7 @@ func loadConfig(configPath string) (Config, error) {
 			"NextDay":            "ctrl+right",
 			"PrevDayWithTasks":   "ctrl+shift+left",
 			"NextDayWithTasks":   "ctrl+shift+right",
+			"JumpToToday":        "h",
 		},
 	}
 
@@ -457,6 +468,16 @@ func loadConfig(configPath string) (Config, error) {
 
 func connectDB(dbPath string) (*sql.DB, error) {
 	log("Connecting to database at %s", dbPath)
+
+	// Expand tilde to home directory if present
+	if strings.HasPrefix(dbPath, "~") {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return nil, err
+		}
+		dbPath = homeDir + dbPath[1:]
+		log("Expanded path to %s", dbPath)
+	}
 
 	// Create the directory structure if it doesn't exist
 	dbDir := filepath.Dir(dbPath)
@@ -511,8 +532,8 @@ func initialModel(db *sql.DB) Model {
 		Foreground(lipgloss.NoColor{})        // No color (transparent)
 
 	s.Selected = s.Selected.
-		Foreground(lipgloss.Color("229")).
-		Background(lipgloss.Color("57")).
+		Foreground(lipgloss.Color(ColorSelectedText)).
+		Background(lipgloss.Color(ColorSelectedBg)).
 		Bold(true)
 	t.SetStyles(s)
 
@@ -558,11 +579,6 @@ func initialModel(db *sql.DB) Model {
 		viewDate:     time.Now(),
 		searchTerm:   "", // Initialize empty search term
 	}
-
-	// Initialize calendar with default size
-	m.calendar = NewCalendarModel(80, 20)
-	// Load tasks for the calendar
-	m.calendar.LoadTasksForMonth(db)
 
 	// Load initial data
 	m.loadTodaysTasks()
@@ -931,11 +947,6 @@ func (m *Model) loadTasks() {
 	}
 
 	m.table.SetRows(tableRows)
-
-	// If we're in calendar view, refresh the calendar data
-	if m.viewMode == CalendarViewMode {
-		m.calendar.LoadTasksForMonth(m.db)
-	}
 }
 
 // For backward compatibility
@@ -1058,6 +1069,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				log("Key matched: Quit")
 				return m, tea.Quit
 
+			case key.Matches(msg, keys.JumpToToday):
+				log("Key matched: JumpToToday")
+				m.loadTodaysTasks()
+
 			case key.Matches(msg, keys.ToggleStatus):
 				log("Key matched: ToggleStatus")
 				if len(m.items) > 0 && m.table.Cursor() < len(m.items) {
@@ -1156,32 +1171,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				log("Key matched: NextDayWithTasks")
 				if m.viewMode == TodayViewMode {
 					m.findNextDayWithTasks()
-				}
-
-			case key.Matches(msg, keys.ToggleCalendarView):
-				log("Key matched: ToggleCalendarView")
-				if m.viewMode == CalendarViewMode {
-					// Switch back to the previous view mode
-					m.viewMode = TodayViewMode
-				} else {
-					// Switch to calendar view
-					m.viewMode = CalendarViewMode
-					// Update calendar with the latest tasks
-					m.calendar.LoadTasksForMonth(m.db)
-				}
-
-			case key.Matches(msg, keys.PrevMonth):
-				log("Key matched: PrevMonth")
-				if m.viewMode == CalendarViewMode {
-					m.calendar.PrevMonth()
-					m.calendar.LoadTasksForMonth(m.db)
-				}
-
-			case key.Matches(msg, keys.NextMonth):
-				log("Key matched: NextMonth")
-				if m.viewMode == CalendarViewMode {
-					m.calendar.NextMonth()
-					m.calendar.LoadTasksForMonth(m.db)
 				}
 
 			case key.Matches(msg, keys.ShowDoneTasks):
@@ -1350,88 +1339,66 @@ func (m Model) View() string {
 
 	switch m.mode {
 	case NormalMode:
-		if m.viewMode == CalendarViewMode {
-			// Render calendar view
-			sb.WriteString(m.calendar.View())
-			sb.WriteString("\n\n")
+		// Table with tasks
+		sb.WriteString(baseStyle.Render(m.table.View()))
+		sb.WriteString("\n")
 
-			// Display help info
-			helpInfo := "Calendar view: showing tasks for " + m.calendar.currentDate.Format("January 2006")
-			sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("86")).Render(helpInfo))
-			sb.WriteString("\n")
+		// Display view mode and date
+		viewInfo := ""
 
-			// Status bar / commands (only shown when showCommands is true)
-			if m.showCommands {
-				commands := []string{
-					"q: quit",
-					"ctrl+p: toggle calendar view",
-					"ctrl+[: previous month",
-					"ctrl+]: next month",
-				}
-				sb.WriteString(statusBar.Render(strings.Join(commands, " | ")))
-			}
-		} else {
-			// Table with tasks
-			sb.WriteString(baseStyle.Render(m.table.View()))
-			sb.WriteString("\n")
-
-			// Display view mode and date
-			viewInfo := ""
-
-			// Build the view mode part
-			var viewModePart string
-			switch m.viewMode {
-			case AllViewMode:
-				viewModePart = "all tasks"
-			case TodayViewMode:
-				viewModePart = fmt.Sprintf("tasks due on %s", m.viewDate.Format("2006-01-02"))
-			}
-
-			// Build the filter part
-			var filterPart string
-			switch m.taskFilter {
-			case AllTasksFilter:
-				filterPart = " (no filter)"
-			case DoneTasksFilter:
-				filterPart = " (completed only)"
-			case UndoneTasksFilter:
-				filterPart = " (pending only)"
-			}
-
-			// Combine the parts
-			viewInfo = fmt.Sprintf("Showing %s%s", viewModePart, filterPart)
-			sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("86")).Render(viewInfo))
-			sb.WriteString("\n")
-
-			// Status bar / commands (only shown when showCommands is true)
-			// Todo: remove m.showCommands?
-			if m.showCommands {
-				commands := []string{
-					"q: quit",
-					"t: toggle status",
-					"a: add task",
-					"e: edit task",
-					"d: delete task",
-					"ctrl+v: toggle view mode",
-					"ctrl+p: calendar view",
-					"ctrl+d: show done tasks",
-					"ctrl+u: show undone tasks",
-					"ctrl+f: search tasks",
-				}
-
-				// Only show day navigation commands when in today view mode
-				// Todo: why only show these commands when in today view mode?
-				if m.viewMode == TodayViewMode {
-					commands = append(commands,
-						"ctrl+←: previous day",
-						"ctrl+→: next day",
-						"ctrl+shift+←: previous day with tasks",
-						"ctrl+shift+→: next day with tasks")
-				}
-
-				sb.WriteString(statusBar.Render(strings.Join(commands, " | ")))
-			}
+		// Build the view mode part
+		var viewModePart string
+		switch m.viewMode {
+		case AllViewMode:
+			viewModePart = "all tasks"
+		case TodayViewMode:
+			viewModePart = fmt.Sprintf("tasks due on %s", m.viewDate.Format("2006-01-02"))
 		}
+
+		// Build the filter part
+		var filterPart string
+		switch m.taskFilter {
+		case AllTasksFilter:
+			filterPart = " (no filter)"
+		case DoneTasksFilter:
+			filterPart = " (completed only)"
+		case UndoneTasksFilter:
+			filterPart = " (pending only)"
+		}
+
+		// Combine the parts
+		viewInfo = fmt.Sprintf("Showing %s%s", viewModePart, filterPart)
+		sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(ColorNormalText)).Render(viewInfo))
+		sb.WriteString("\n")
+
+		//// Status bar / commands (only shown when showCommands is true)
+		//// Todo: remove m.showCommands?
+		//if m.showCommands {
+		//	commands := []string{
+		//		"q: quit",
+		//		"t: toggle status",
+		//		"a: add task",
+		//		"e: edit task",
+		//		"d: delete task",
+		//		"ctrl+v: toggle view mode",
+		//		"ctrl+p: calendar view",
+		//		"ctrl+d: show done tasks",
+		//		"ctrl+u: show undone tasks",
+		//		"ctrl+f: search tasks",
+		//	}
+		//
+		//	// Only show day navigation commands when in today view mode
+		//	// Todo: why only show these commands when in today view mode?
+		//	if m.viewMode == TodayViewMode {
+		//		commands = append(commands,
+		//			"ctrl+←: previous day",
+		//			"ctrl+→: next day",
+		//			"ctrl+shift+←: previous day with tasks",
+		//			"ctrl+shift+→: next day with tasks")
+		//	}
+		//
+		//	sb.WriteString(statusBar.Render(strings.Join(commands, " | ")))
+		//}
 
 	case AddMode:
 		sb.WriteString(lipgloss.NewStyle().Bold(true).Render("Add New Task"))
@@ -1448,7 +1415,7 @@ func (m Model) View() string {
 		sb.WriteString(statusBar.Render("Tab: next field • Enter: submit • Esc: cancel"))
 
 	case DeleteConfirmMode:
-		sb.WriteString(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("9")).Render("Delete Task"))
+		sb.WriteString(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ColorError)).Render("Delete Task"))
 		sb.WriteString("\n\n")
 
 		if m.editingItem != nil {
@@ -1475,12 +1442,12 @@ func (m Model) View() string {
 
 		// Define a style for command keys
 		keyStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("205")).
+			Foreground(lipgloss.Color(ColorAccent)).
 			Bold(true)
 
 		// Define a style for command descriptions
 		descStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("86"))
+			Foreground(lipgloss.Color(ColorNormalText))
 
 		// Function to add a command to the view
 		addCommand := func(binding key.Binding) {
@@ -1515,15 +1482,6 @@ func (m Model) View() string {
 		addCommand(keys.NextDay)
 		addCommand(keys.PrevDayWithTasks)
 		addCommand(keys.NextDayWithTasks)
-
-		// Calendar commands
-		sb.WriteString("\n")
-		sb.WriteString(lipgloss.NewStyle().Bold(true).Render("Calendar Commands"))
-		sb.WriteString("\n\n")
-
-		addCommand(keys.ToggleCalendarView)
-		addCommand(keys.PrevMonth)
-		addCommand(keys.NextMonth)
 
 		// Add a footer
 		sb.WriteString("\n\n")
@@ -1583,10 +1541,10 @@ func highlightProjectsAndContexts(text string) string {
 		// Check if word is a project tag (+project)
 		if strings.HasPrefix(word, "+") && len(word) > 1 {
 			// Highlight project with a different color (green)
-			result.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("2")).Render(word))
+			result.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(ColorProject)).Render(word))
 		} else if strings.HasPrefix(word, "@") && len(word) > 1 {
 			// Highlight context with a different color (blue)
-			result.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("4")).Render(word))
+			result.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(ColorContext)).Render(word))
 		} else {
 			// Regular word, no highlighting
 			result.WriteString(word)
@@ -1602,7 +1560,7 @@ func (m Model) renderForm() string {
 
 	formStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("240")).
+		BorderForeground(lipgloss.Color(ColorBorder)).
 		Padding(1, 2)
 
 	// Title input
