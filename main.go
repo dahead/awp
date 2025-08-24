@@ -307,8 +307,9 @@ func ensureSchema(db *sql.DB) error {
 }
 
 func initialModel(db *sql.DB) Model {
+	// Create an empty column - the title will be empty to avoid showing a header
 	columns := []table.Column{
-		{Title: "Todo", Width: 60},
+		{Title: "", Width: 60},
 	}
 
 	t := table.New(
@@ -318,11 +319,13 @@ func initialModel(db *sql.DB) Model {
 	)
 
 	s := table.DefaultStyles()
+	// Remove the header border and styling to make it invisible
 	s.Header = s.Header.
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(lipgloss.Color("240")).
-		BorderBottom(true).
-		Bold(true)
+		BorderStyle(lipgloss.HiddenBorder()). // Hidden border
+		BorderBottom(false).                  // No border at bottom
+		Bold(false).                          // Not bold
+		Foreground(lipgloss.NoColor{})        // No color (transparent)
+
 	s.Selected = s.Selected.
 		Foreground(lipgloss.Color("229")).
 		Background(lipgloss.Color("57")).
@@ -331,7 +334,7 @@ func initialModel(db *sql.DB) Model {
 
 	// Initialize text inputs
 	titleInput := textinput.New()
-	titleInput.Placeholder = "Title"
+	titleInput.Placeholder = "Title (you can include +project and @context tags)"
 	titleInput.Focus()
 	titleInput.Width = 40
 
@@ -351,7 +354,7 @@ func initialModel(db *sql.DB) Model {
 
 	// Initialize search input
 	searchInput := textinput.New()
-	searchInput.Placeholder = "Search tasks by title or description"
+	searchInput.Placeholder = "Search tasks (you can use +project or @context in title and description)"
 	searchInput.Focus()
 	searchInput.Width = 40
 
@@ -442,9 +445,11 @@ func (m *Model) submitForm() {
 		}
 	}
 
-	// Parse projects and contexts from description
-	projects := parseProjects(desc)
-	contexts := parseContexts(desc)
+	// Parse projects and contexts from title and description
+	projects := parseProjects(title)
+	projects = append(projects, parseProjects(desc)...)
+	contexts := parseContexts(title)
+	contexts = append(contexts, parseContexts(desc)...)
 
 	// Parse due date
 	var parsedDueDate time.Time
@@ -680,8 +685,26 @@ func (m *Model) loadTasks() {
 
 	// Finally, add search term filter if one is set
 	if m.searchTerm != "" {
-		searchClause := fmt.Sprintf("(title LIKE '%%%s%%' OR description LIKE '%%%s%%')",
-			m.searchTerm, m.searchTerm)
+		var searchClause string
+
+		// Check if searching for project with +project syntax
+		if strings.HasPrefix(m.searchTerm, "+") && len(m.searchTerm) > 1 {
+			projectName := m.searchTerm[1:] // Remove the + prefix
+			// Search in projects column or in description
+			searchClause = fmt.Sprintf("(projects LIKE '%%%s%%' OR description LIKE '%%%s%%')",
+				projectName, m.searchTerm)
+		} else if strings.HasPrefix(m.searchTerm, "@") && len(m.searchTerm) > 1 {
+			// Check if searching for context with @context syntax
+			contextName := m.searchTerm[1:] // Remove the @ prefix
+			// Search in contexts column or in description
+			searchClause = fmt.Sprintf("(contexts LIKE '%%%s%%' OR description LIKE '%%%s%%')",
+				contextName, m.searchTerm)
+		} else {
+			// Regular search in title or description
+			searchClause = fmt.Sprintf("(title LIKE '%%%s%%' OR description LIKE '%%%s%%')",
+				m.searchTerm, m.searchTerm)
+		}
+
 		if whereClause == "" {
 			whereClause = searchClause
 		} else {
@@ -713,8 +736,11 @@ func (m *Model) loadTasks() {
 			displayText = item.Title
 		}
 
-		// Combined display with just status and text
-		combinedText := fmt.Sprintf("%s %s", status, displayText)
+		// Highlight project and context tags in the display text
+		highlightedText := highlightProjectsAndContexts(displayText)
+
+		// Combined display with just status and highlighted text
+		combinedText := fmt.Sprintf("%s %s", status, highlightedText)
 		tableRows = append(tableRows, table.Row{combinedText})
 	}
 
@@ -769,8 +795,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							// Extract the text part (everything after the status)
 							text := selectedRow[0][4:] // Skip the status part "[ ] " or "[x] "
 
-							// Create the new row
-							selectedRow[0] = fmt.Sprintf("%s %s", statusPrefix, text)
+							// Highlight project and context tags in the text
+							highlightedText := highlightProjectsAndContexts(text)
+
+							// Create the new row with highlighted text
+							selectedRow[0] = fmt.Sprintf("%s %s", statusPrefix, highlightedText)
 							rows := m.table.Rows()
 							rows[m.table.Cursor()] = selectedRow
 							m.table.SetRows(rows)
@@ -1084,6 +1113,34 @@ func parseContexts(description string) []string {
 	}
 
 	return contexts
+}
+
+// highlightProjectsAndContexts highlights project and context tags in text
+func highlightProjectsAndContexts(text string) string {
+	// Split the text into words
+	words := strings.Fields(text)
+	var result strings.Builder
+
+	// Process each word
+	for i, word := range words {
+		if i > 0 {
+			result.WriteString(" ") // Add space between words
+		}
+
+		// Check if word is a project tag (+project)
+		if strings.HasPrefix(word, "+") && len(word) > 1 {
+			// Highlight project with a different color (green)
+			result.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("2")).Render(word))
+		} else if strings.HasPrefix(word, "@") && len(word) > 1 {
+			// Highlight context with a different color (blue)
+			result.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("4")).Render(word))
+		} else {
+			// Regular word, no highlighting
+			result.WriteString(word)
+		}
+	}
+
+	return result.String()
 }
 
 // renderForm renders the input form for adding/editing tasks
