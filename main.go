@@ -20,8 +20,9 @@ import (
 
 // Config holds the application configuration
 type Config struct {
-	Database      string `json:"database"`
-	CentralHotkey string `json:"central_hotkey"`
+	Database      string            `json:"database"`
+	CentralHotkey string            `json:"central_hotkey"`
+	KeyMap        map[string]string `json:"keymap"`
 }
 
 // TodoItem represents a single todo task
@@ -180,12 +181,142 @@ func defaultKeyMap() keyMap {
 	}
 }
 
-var keys = defaultKeyMap()
+func configuredKeyMap(config Config) keyMap {
+	// Parse key bindings from config
+	log("Parsing key bindings from configuration")
+	km := keyMap{
+		ToggleShowCommands: parseKeyBinding(config.KeyMap["ToggleShowCommands"], "ctrl+b", "show/hide commands"),
+		Quit:               parseKeyBinding(config.KeyMap["Quit"], "q", "quit"),
+		ToggleStatus:       parseKeyBinding(config.KeyMap["ToggleStatus"], "t", "toggle status"),
+		AddTask:            parseKeyBinding(config.KeyMap["AddTask"], "a", "add task"),
+		EditTask:           parseKeyBinding(config.KeyMap["EditTask"], "e", "edit task"),
+		DeleteTask:         parseKeyBinding(config.KeyMap["DeleteTask"], "d", "delete task"),
+		ToggleViewMode:     parseKeyBinding(config.KeyMap["ToggleViewMode"], "ctrl+v", "toggle between today's tasks and all tasks"),
+		ShowDoneTasks:      parseKeyBinding(config.KeyMap["ShowDoneTasks"], "ctrl+d", "show only done tasks"),
+		ShowUndoneTasks:    parseKeyBinding(config.KeyMap["ShowUndoneTasks"], "ctrl+u", "show only undone tasks"),
+		SearchTasks:        parseKeyBinding(config.KeyMap["SearchTasks"], "ctrl+f", "search tasks"),
+		PrevDay:            parseKeyBinding(config.KeyMap["PrevDay"], "ctrl+left", "previous day"),
+		NextDay:            parseKeyBinding(config.KeyMap["NextDay"], "ctrl+right", "next day"),
+	}
+	log("Finished parsing key bindings")
+	return km
+}
+
+func parseKeyBinding(configKey, defaultKey, help string) key.Binding {
+	log("Parsing key binding for '%s'", help)
+
+	if configKey == "" {
+		log("No configured key for '%s', using default: %s", help, defaultKey)
+		configKey = defaultKey
+	} else {
+		log("Using configured key for '%s': %s", help, configKey)
+	}
+
+	// Handle JSON array format ["key1", "key2", "key3"] by removing brackets and quotes
+	if strings.HasPrefix(configKey, "[") && strings.HasSuffix(configKey, "]") {
+		// Remove the brackets
+		configKey = strings.TrimPrefix(configKey, "[")
+		configKey = strings.TrimSuffix(configKey, "]")
+
+		// Remove quotes and split by comma
+		var keys []string
+		parts := strings.Split(configKey, ",")
+		for _, part := range parts {
+			// Trim whitespace and quotes
+			key := strings.Trim(part, " \"'")
+			if key != "" {
+				keys = append(keys, key)
+			}
+		}
+
+		log("Parsed keys from JSON array for '%s': %v", help, keys)
+
+		binding := key.NewBinding(
+			key.WithKeys(keys...),
+			key.WithHelp(strings.Join(keys, "/"), help),
+		)
+
+		log("Created key binding for '%s'", help)
+		return binding
+	}
+
+	// Handle space-separated keys (original behavior)
+	keys := strings.Fields(configKey)
+
+	// Also handle comma-separated keys without brackets
+	if len(keys) == 1 && strings.Contains(configKey, ",") {
+		var commaKeys []string
+		parts := strings.Split(configKey, ",")
+		for _, part := range parts {
+			key := strings.TrimSpace(part)
+			if key != "" {
+				commaKeys = append(commaKeys, key)
+			}
+		}
+
+		if len(commaKeys) > 0 {
+			keys = commaKeys
+		}
+	}
+
+	log("Parsed keys for '%s': %v", help, keys)
+
+	binding := key.NewBinding(
+		key.WithKeys(keys...),
+		key.WithHelp(strings.Join(keys, "/"), help),
+	)
+
+	log("Created key binding for '%s'", help)
+	return binding
+}
+
+// Logger for debug messages
+var (
+	keys      = defaultKeyMap()
+	isVerbose = false
+	logFile   *os.File
+)
+
+// log prints debug messages to the log file if verbose mode is enabled
+func log(format string, args ...interface{}) {
+	if isVerbose && logFile != nil {
+		fmt.Fprintf(logFile, "[DEBUG] "+format+"\n", args...)
+	}
+}
+
+// initLogger initializes the logging system
+func initLogger(verbose bool) {
+	isVerbose = verbose
+
+	if verbose {
+		// Create log filename with current date and time
+		now := time.Now()
+		logFileName := fmt.Sprintf("/tmp/awp_%s.log", now.Format("2006-01-02_15-04"))
+
+		var err error
+		logFile, err = os.Create(logFileName)
+		if err != nil {
+			fmt.Printf("Error creating log file: %v\n", err)
+			return
+		}
+
+		log("Verbose logging enabled")
+	}
+}
 
 func main() {
 	// Parse command line flags
 	configPath := flag.String("config", "", "Path to configuration file")
+	verbose := flag.Bool("verbose", false, "Enable verbose logging")
 	flag.Parse()
+
+	// Initialize logger
+	initLogger(*verbose)
+
+	// Close log file when application exits
+	if logFile != nil {
+		defer logFile.Close()
+	}
 
 	// Load configuration
 	config, err := loadConfig(*configPath)
@@ -193,6 +324,11 @@ func main() {
 		fmt.Printf("Error loading config: %v\n", err)
 		os.Exit(1)
 	}
+
+	// Initialize keys with configured keybindings
+	log("Initializing key bindings from configuration")
+	keys = configuredKeyMap(config)
+	log("Key bindings initialized successfully")
 
 	// Connect to database
 	db, err := connectDB(config.Database)
@@ -232,6 +368,20 @@ func loadConfig(configPath string) (Config, error) {
 	config := Config{
 		Database:      defaultDbPath,
 		CentralHotkey: "ctrl+b",
+		KeyMap: map[string]string{
+			"ToggleShowCommands": "ctrl+b",
+			"Quit":               "q",
+			"ToggleStatus":       "t",
+			"AddTask":            "a",
+			"EditTask":           "e",
+			"DeleteTask":         "d",
+			"ToggleViewMode":     "ctrl+v",
+			"ShowDoneTasks":      "ctrl+d",
+			"ShowUndoneTasks":    "ctrl+u",
+			"SearchTasks":        "ctrl+f",
+			"PrevDay":            "ctrl+left",
+			"NextDay":            "ctrl+right",
+		},
 	}
 
 	// If configPath is empty, use the default path
@@ -764,17 +914,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		log("Key pressed: %s", msg.String())
 		switch m.mode {
 		case NormalMode:
 			// Handle normal mode key presses
+			log("Handling key in NormalMode")
 			switch {
 			case key.Matches(msg, keys.ToggleShowCommands):
+				log("Key matched: ToggleShowCommands")
 				m.showCommands = !m.showCommands
 
 			case key.Matches(msg, keys.Quit):
+				log("Key matched: Quit")
 				return m, tea.Quit
 
 			case key.Matches(msg, keys.ToggleStatus):
+				log("Key matched: ToggleStatus")
 				if len(m.items) > 0 && m.table.Cursor() < len(m.items) {
 					// Update in database
 					idx := m.table.Cursor()
@@ -808,10 +963,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 
 			case key.Matches(msg, keys.AddTask):
+				log("Key matched: AddTask")
 				m.mode = AddMode
 				m.resetInputs()
 
 			case key.Matches(msg, keys.EditTask):
+				log("Key matched: EditTask")
 				if len(m.items) > 0 && m.table.Cursor() < len(m.items) {
 					m.mode = EditMode
 					m.editingItem = &m.items[m.table.Cursor()]
@@ -829,12 +986,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 
 			case key.Matches(msg, keys.DeleteTask):
+				log("Key matched: DeleteTask")
 				if len(m.items) > 0 && m.table.Cursor() < len(m.items) {
 					m.mode = DeleteConfirmMode
 					m.editingItem = &m.items[m.table.Cursor()]
 				}
 
 			case key.Matches(msg, keys.ToggleViewMode):
+				log("Key matched: ToggleViewMode")
 				// Toggle between today's tasks and all tasks
 				if m.viewMode == TodayViewMode {
 					m.viewMode = AllViewMode
@@ -844,18 +1003,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.loadTasks()
 
 			case key.Matches(msg, keys.PrevDay):
+				log("Key matched: PrevDay")
 				if m.viewMode == TodayViewMode {
 					m.viewDate = m.viewDate.AddDate(0, 0, -1)
 					m.loadTasks()
 				}
 
 			case key.Matches(msg, keys.NextDay):
+				log("Key matched: NextDay")
 				if m.viewMode == TodayViewMode {
 					m.viewDate = m.viewDate.AddDate(0, 0, 1)
 					m.loadTasks()
 				}
 
 			case key.Matches(msg, keys.ShowDoneTasks):
+				log("Key matched: ShowDoneTasks")
 				// Toggle between done tasks and all tasks
 				if m.taskFilter == DoneTasksFilter {
 					m.taskFilter = AllTasksFilter
@@ -865,6 +1027,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.loadTasks()
 
 			case key.Matches(msg, keys.ShowUndoneTasks):
+				log("Key matched: ShowUndoneTasks")
 				// Toggle between undone tasks and all tasks
 				if m.taskFilter == UndoneTasksFilter {
 					m.taskFilter = AllTasksFilter
@@ -874,6 +1037,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.loadTasks()
 
 			case key.Matches(msg, keys.SearchTasks):
+				log("Key matched: SearchTasks")
 				// Enter search mode
 				m.mode = SearchMode
 				m.searchInput.Focus()
@@ -883,22 +1047,28 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case AddMode, EditMode:
 			// Handle input mode key presses
+			log("Handling key in %s", m.mode)
 			switch msg.String() {
 			case "esc":
+				log("Key pressed: esc (cancel input)")
 				m.mode = NormalMode
 				m.resetInputs()
 				m.editingItem = nil
 
 			case "tab":
+				log("Key pressed: tab (next input)")
 				m.focusNextInput()
 
 			//case "shift+tab":
 			//	m.focusPreviousInput()
 
 			case "enter":
+				log("Key pressed: enter (input field %d)", m.activeInput)
 				if m.activeInput == 3 { // Submit on enter from the last field (due date)
+					log("Submitting form")
 					m.submitForm()
 				} else {
+					log("Moving to next input")
 					m.focusNextInput()
 				}
 			}
@@ -921,16 +1091,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case SearchMode:
 			// Handle search mode key presses
+			log("Handling key in SearchMode")
 			switch msg.String() {
 			case "esc":
+				log("Key pressed: esc (exit search)")
 				// Exit search mode
 				m.mode = NormalMode
 				m.searchTerm = ""
 				m.loadTasks()
 
 			case "enter":
+				log("Key pressed: enter (perform search)")
 				// Perform search
 				m.searchTerm = m.searchInput.Value()
+				log("Searching for: %s", m.searchTerm)
 				m.mode = NormalMode
 				m.loadTasks()
 			}
@@ -941,14 +1115,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case DeleteConfirmMode:
 			// Handle delete confirmation
+			log("Handling key in DeleteConfirmMode")
 			switch msg.String() {
 			case "y", "Y":
+				log("Key pressed: %s (confirm delete)", msg.String())
 				if m.editingItem != nil {
+					log("Deleting task ID: %d", m.editingItem.ID)
 					// Delete from database using the database function
 					err := deleteTask(m.db, m.editingItem.ID)
 					if err != nil {
+						log("Error deleting task: %v", err)
 						m.err = err
 					} else {
+						log("Task deleted successfully")
 						m.loadTodaysTasks()
 					}
 				}
@@ -956,6 +1135,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.editingItem = nil
 
 			case "n", "N", "esc":
+				log("Key pressed: %s (cancel delete)", msg.String())
 				m.mode = NormalMode
 				m.editingItem = nil
 			}

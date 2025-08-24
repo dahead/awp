@@ -51,10 +51,24 @@ The application can be configured in two ways:
    - A `config.json` file located at `/home/users/.config/awp/config`
    - Example configuration:
      ```json
-     {
-       "database": "todo.db",
-       "central_hotkey": "ctrl+b"
-     }
+    {
+    "database": "/tmp/test_todo.db",
+    "central_hotkey": "ctrl+b",
+        "keymap": {
+        "ToggleShowCommands": "ctrl+b",
+        "Quit": "[\"q\", \"ctrl+c\"]",
+        "ToggleStatus": "t",
+        "AddTask": "[\"a\", \"insert\"]",
+        "EditTask": "[\"e\", \"enter\"]",
+        "DeleteTask": "[\"d\", \"delete\"]",
+        "ToggleViewMode": "ctrl+v",
+        "ShowDoneTasks": "ctrl+d",
+        "ShowUndoneTasks": "ctrl+u",
+        "SearchTasks": "ctrl+f",
+        "PrevDay": "[\"ctrl+left\", \"left\", \"j\"]",
+        "NextDay": "[\"ctrl+right\", \"right\", \"l\"]"
+        }
+    }
      ```
 
 ## Database
