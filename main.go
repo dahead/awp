@@ -552,7 +552,7 @@ func (m *Model) resetInputs() {
 	m.descInput.Reset()
 	m.tagsInput.Reset()
 	// Set due date input to today's date
-	m.dueDateInput.SetValue(time.Now().Format("2006-01-02"))
+	m.dueDateInput.SetValue(m.viewDate.Format("2006-01-02"))
 
 	m.activeInput = 0
 	m.titleInput.Focus()
@@ -625,8 +625,8 @@ func (m *Model) submitForm() {
 			return
 		}
 	} else {
-		// Default to today if no date provided
-		parsedDueDate = time.Now()
+		// Default to current views date if no date provided
+		parsedDueDate = m.viewDate
 	}
 
 	switch m.mode {
