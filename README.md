@@ -13,7 +13,6 @@ A simple CLI todo application written in Go that uses sqlite3 for task managemen
 - Filtering capabilities to show only done or undone tasks
 - Search functionality to find specific tasks
 - Stores data in a SQLite database
-- Path expansion with tilde (~) support in configuration files
 - Central hotkey (CTRL+B) to show additional commands
 - Full CRUD operations for managing tasks
 
@@ -54,28 +53,27 @@ The application can be configured in two ways:
 2. Configuration file:
 ```
    - A `config.json` file located at `/home/users/.config/awp/config`
-   - The application supports path expansion for the database location. You can use `~` in the database path, which will be expanded to the user's home directory.
    - Example configuration:
      ```json
     {
     "database": "~/.config/awp/todo.db",
     "central_hotkey": "ctrl+b",
         "keymap": {
-        "ToggleShowCommands": "ctrl+b",
-        "Quit": "[\"q\", \"ctrl+c\"]",
-        "ToggleStatus": "t",
-        "AddTask": "[\"a\", \"insert\"]",
-        "EditTask": "[\"e\", \"enter\"]",
-        "DeleteTask": "[\"d\", \"delete\"]",
-        "ToggleViewMode": "ctrl+v",
-        "ShowDoneTasks": "ctrl+d",
-        "ShowUndoneTasks": "ctrl+u",
-        "SearchTasks": "ctrl+f",
-        "PrevDay": "[\"ctrl+left\", \"left\", \"j\"]",
-        "NextDay": "[\"ctrl+right\", \"right\", \"l\"]",
-        "PrevDayWithTasks": "ctrl+shift+left",
-        "NextDayWithTasks": "ctrl+shift+right",
-        "JumpToToday": "h"
+            "ToggleShowCommands": "ctrl+b",
+            "Quit": "[\"q\", \"ctrl+c\"]",
+            "ToggleStatus": "t",
+            "AddTask": "[\"a\", \"insert\"]",
+            "EditTask": "[\"e\", \"enter\"]",
+            "DeleteTask": "[\"d\", \"delete\"]",
+            "ToggleViewMode": "ctrl+v",
+            "ShowDoneTasks": "ctrl+d",
+            "ShowUndoneTasks": "ctrl+u",
+            "SearchTasks": "ctrl+f",
+            "PrevDay": "[\"ctrl+left\", \"left\", \"j\"]",
+            "NextDay": "[\"ctrl+right\", \"right\", \"l\"]",
+            "PrevDayWithTasks": "ctrl+shift+left",
+            "NextDayWithTasks": "ctrl+shift+right",
+            "JumpToToday": "h"
         }
     }
  ```
