@@ -47,15 +47,17 @@ const (
 	AddMode
 	EditMode
 	DeleteConfirmMode
-	SearchMode
+	SearchMode       // Mode for searching tasks
+	CommandsViewMode // Mode for displaying commands
 )
 
 // ViewMode represents the current view mode for tasks
 type ViewMode int
 
 const (
-	TodayViewMode ViewMode = iota // Default - show tasks for today
-	AllViewMode                   // Show all tasks (no date filter)
+	TodayViewMode    ViewMode = iota // Default - show tasks for today
+	AllViewMode                      // Show all tasks (no date filter)
+	CalendarViewMode                 // Show calendar view
 )
 
 // TaskFilter represents the current task filter mode
@@ -83,6 +85,9 @@ type Model struct {
 	viewDate   time.Time
 	searchTerm string // For search functionality
 
+	// Calendar view
+	calendar CalendarModel
+
 	// Form state
 	mode         InputMode
 	titleInput   textinput.Model
@@ -100,11 +105,6 @@ var (
 	baseStyle = lipgloss.NewStyle().
 			BorderStyle(lipgloss.NormalBorder()).
 			BorderForeground(lipgloss.Color("240"))
-
-	//titleStyle = lipgloss.NewStyle().
-	//		Foreground(lipgloss.Color("205")).
-	//		Bold(true).
-	//		PaddingLeft(1)
 
 	statusBar = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("205")).
@@ -128,6 +128,9 @@ type keyMap struct {
 	NextDay            key.Binding
 	PrevDayWithTasks   key.Binding
 	NextDayWithTasks   key.Binding
+	ToggleCalendarView key.Binding
+	PrevMonth          key.Binding
+	NextMonth          key.Binding
 }
 
 func defaultKeyMap() keyMap {
@@ -141,8 +144,8 @@ func defaultKeyMap() keyMap {
 			key.WithHelp("q", "quit"),
 		),
 		ToggleStatus: key.NewBinding(
-			key.WithKeys("t"),
-			key.WithHelp("t", "toggle status"),
+			key.WithKeys("space"),
+			key.WithHelp("space", "toggle status"),
 		),
 		AddTask: key.NewBinding(
 			key.WithKeys("a"),
@@ -188,6 +191,18 @@ func defaultKeyMap() keyMap {
 			key.WithKeys("ctrl+shift+right"),
 			key.WithHelp("ctrl+shift+→", "next day with tasks"),
 		),
+		ToggleCalendarView: key.NewBinding(
+			key.WithKeys("ctrl+p"),
+			key.WithHelp("ctrl+p", "toggle calendar view"),
+		),
+		PrevMonth: key.NewBinding(
+			key.WithKeys("ctrl+["),
+			key.WithHelp("ctrl+[", "previous month"),
+		),
+		NextMonth: key.NewBinding(
+			key.WithKeys("ctrl+]"),
+			key.WithHelp("ctrl+]", "next month"),
+		),
 	}
 }
 
@@ -209,6 +224,9 @@ func configuredKeyMap(config Config) keyMap {
 		NextDay:            parseKeyBinding(config.KeyMap["NextDay"], "ctrl+right", "next day"),
 		PrevDayWithTasks:   parseKeyBinding(config.KeyMap["PrevDayWithTasks"], "ctrl+shift+left", "previous day with tasks"),
 		NextDayWithTasks:   parseKeyBinding(config.KeyMap["NextDayWithTasks"], "ctrl+shift+right", "next day with tasks"),
+		ToggleCalendarView: parseKeyBinding(config.KeyMap["ToggleCalendarView"], "ctrl+p", "toggle calendar view"),
+		PrevMonth:          parseKeyBinding(config.KeyMap["PrevMonth"], "ctrl+[", "previous month"),
+		NextMonth:          parseKeyBinding(config.KeyMap["NextMonth"], "ctrl+]", "next month"),
 	}
 	log("Finished parsing key bindings")
 	return km
@@ -383,7 +401,7 @@ func loadConfig(configPath string) (Config, error) {
 		KeyMap: map[string]string{
 			"ToggleShowCommands": "ctrl+b",
 			"Quit":               "q",
-			"ToggleStatus":       "t",
+			"ToggleStatus":       "space",
 			"AddTask":            "a",
 			"EditTask":           "e",
 			"DeleteTask":         "d",
@@ -438,6 +456,8 @@ func loadConfig(configPath string) (Config, error) {
 }
 
 func connectDB(dbPath string) (*sql.DB, error) {
+	log("Connecting to database at %s", dbPath)
+
 	// Create the directory structure if it doesn't exist
 	dbDir := filepath.Dir(dbPath)
 	if dbDir != "." {
@@ -518,7 +538,7 @@ func initialModel(db *sql.DB) Model {
 
 	// Initialize search input
 	searchInput := textinput.New()
-	searchInput.Placeholder = "Search tasks (you can use +project or @context in title and description)"
+	searchInput.Placeholder = "Search tasks (you can use +project or @context)"
 	searchInput.Focus()
 	searchInput.Width = 40
 
@@ -535,10 +555,14 @@ func initialModel(db *sql.DB) Model {
 		activeInput:  0,
 		viewMode:     TodayViewMode,  // Default view mode shows today's tasks
 		taskFilter:   AllTasksFilter, // Default to showing all tasks (both done and undone)
-		// showAllTasks: false,          // Keep for backward compatibility
-		viewDate:   time.Now(),
-		searchTerm: "", // Initialize empty search term
+		viewDate:     time.Now(),
+		searchTerm:   "", // Initialize empty search term
 	}
+
+	// Initialize calendar with default size
+	m.calendar = NewCalendarModel(80, 20)
+	// Load tasks for the calendar
+	m.calendar.LoadTasksForMonth(db)
 
 	// Load initial data
 	m.loadTodaysTasks()
@@ -819,20 +843,18 @@ func (m *Model) loadTasks() {
 	// First, set up the date part of the where clause based on view mode
 	switch m.viewMode {
 	case AllViewMode:
-		// Show all tasks (no date filter)
 		whereClause = ""
-		// m.showAllTasks = true // For backward compatibility
 	case TodayViewMode:
 		// Show tasks for specific date
 		dateStr := m.viewDate.Format("2006-01-02")
 		whereClause = fmt.Sprintf("date(duedate) = date('%s')", dateStr)
-		// m.showAllTasks = false // For backward compatibility
 	}
 
 	// Then, add the status part of the where clause based on task filter
 	switch m.taskFilter {
 	case AllTasksFilter:
 		// No additional filter needed
+		// whereClause = "status = 0 OR status = 1"
 	case DoneTasksFilter:
 		if whereClause == "" {
 			whereClause = "status = 1" // SQLite uses 1 for true
@@ -909,6 +931,11 @@ func (m *Model) loadTasks() {
 	}
 
 	m.table.SetRows(tableRows)
+
+	// If we're in calendar view, refresh the calendar data
+	if m.viewMode == CalendarViewMode {
+		m.calendar.LoadTasksForMonth(m.db)
+	}
 }
 
 // For backward compatibility
@@ -1024,7 +1051,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch {
 			case key.Matches(msg, keys.ToggleShowCommands):
 				log("Key matched: ToggleShowCommands")
-				m.showCommands = !m.showCommands
+				// Switch to CommandsViewMode instead of toggling showCommands
+				m.mode = CommandsViewMode
 
 			case key.Matches(msg, keys.Quit):
 				log("Key matched: Quit")
@@ -1128,6 +1156,32 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				log("Key matched: NextDayWithTasks")
 				if m.viewMode == TodayViewMode {
 					m.findNextDayWithTasks()
+				}
+
+			case key.Matches(msg, keys.ToggleCalendarView):
+				log("Key matched: ToggleCalendarView")
+				if m.viewMode == CalendarViewMode {
+					// Switch back to the previous view mode
+					m.viewMode = TodayViewMode
+				} else {
+					// Switch to calendar view
+					m.viewMode = CalendarViewMode
+					// Update calendar with the latest tasks
+					m.calendar.LoadTasksForMonth(m.db)
+				}
+
+			case key.Matches(msg, keys.PrevMonth):
+				log("Key matched: PrevMonth")
+				if m.viewMode == CalendarViewMode {
+					m.calendar.PrevMonth()
+					m.calendar.LoadTasksForMonth(m.db)
+				}
+
+			case key.Matches(msg, keys.NextMonth):
+				log("Key matched: NextMonth")
+				if m.viewMode == CalendarViewMode {
+					m.calendar.NextMonth()
+					m.calendar.LoadTasksForMonth(m.db)
 				}
 
 			case key.Matches(msg, keys.ShowDoneTasks):
@@ -1253,6 +1307,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.mode = NormalMode
 				m.editingItem = nil
 			}
+
+		case CommandsViewMode:
+			// Handle commands view mode key presses
+			log("Handling key in CommandsViewMode")
+			switch msg.String() {
+			case "esc":
+				log("Key pressed: esc (exit commands view)")
+				// Exit commands view mode
+				m.mode = NormalMode
+
+			case "ctrl+b":
+				log("Key pressed: ctrl+b (exit commands view)")
+				// Exit commands view mode
+				m.mode = NormalMode
+			}
 		}
 
 	case tea.WindowSizeMsg:
@@ -1281,62 +1350,87 @@ func (m Model) View() string {
 
 	switch m.mode {
 	case NormalMode:
-		// Table with tasks
-		sb.WriteString(baseStyle.Render(m.table.View()))
-		sb.WriteString("\n")
+		if m.viewMode == CalendarViewMode {
+			// Render calendar view
+			sb.WriteString(m.calendar.View())
+			sb.WriteString("\n\n")
 
-		// Display view mode and date
-		viewInfo := ""
+			// Display help info
+			helpInfo := "Calendar view: showing tasks for " + m.calendar.currentDate.Format("January 2006")
+			sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("86")).Render(helpInfo))
+			sb.WriteString("\n")
 
-		// Build the view mode part
-		var viewModePart string
-		switch m.viewMode {
-		case AllViewMode:
-			viewModePart = "all tasks"
-		case TodayViewMode:
-			viewModePart = fmt.Sprintf("tasks due on %s", m.viewDate.Format("2006-01-02"))
-		}
+			// Status bar / commands (only shown when showCommands is true)
+			if m.showCommands {
+				commands := []string{
+					"q: quit",
+					"ctrl+p: toggle calendar view",
+					"ctrl+[: previous month",
+					"ctrl+]: next month",
+				}
+				sb.WriteString(statusBar.Render(strings.Join(commands, " | ")))
+			}
+		} else {
+			// Table with tasks
+			sb.WriteString(baseStyle.Render(m.table.View()))
+			sb.WriteString("\n")
 
-		// Build the filter part
-		var filterPart string
-		switch m.taskFilter {
-		case AllTasksFilter:
-			filterPart = "" // No special message for all tasks
-		case DoneTasksFilter:
-			filterPart = " (completed only)"
-		case UndoneTasksFilter:
-			filterPart = " (pending only)"
-		}
+			// Display view mode and date
+			viewInfo := ""
 
-		// Combine the parts
-		viewInfo = fmt.Sprintf("Showing %s%s", viewModePart, filterPart)
-		sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("86")).Render(viewInfo))
-		sb.WriteString("\n")
-
-		// Status bar / commands (only shown when showCommands is true)
-		if m.showCommands {
-			commands := []string{
-				"q: quit",
-				"t: toggle status",
-				"a: add task",
-				"e: edit task",
-				"d: delete task",
-				"ctrl+v: toggle view mode",
-				"ctrl+d: show done tasks",
-				"ctrl+u: show undone tasks",
-				"ctrl+f: search tasks",
+			// Build the view mode part
+			var viewModePart string
+			switch m.viewMode {
+			case AllViewMode:
+				viewModePart = "all tasks"
+			case TodayViewMode:
+				viewModePart = fmt.Sprintf("tasks due on %s", m.viewDate.Format("2006-01-02"))
 			}
 
-			// Only show day navigation commands when in today view mode
-			if m.viewMode == TodayViewMode {
-				commands = append(commands,
-					"ctrl+←: previous day",
-					"ctrl+→: next day",
-					"ctrl+shift+←: previous day with tasks",
-					"ctrl+shift+→: next day with tasks")
+			// Build the filter part
+			var filterPart string
+			switch m.taskFilter {
+			case AllTasksFilter:
+				filterPart = " (no filter)"
+			case DoneTasksFilter:
+				filterPart = " (completed only)"
+			case UndoneTasksFilter:
+				filterPart = " (pending only)"
 			}
 
-			sb.WriteString(statusBar.Render(strings.Join(commands, " | ")))
+			// Combine the parts
+			viewInfo = fmt.Sprintf("Showing %s%s", viewModePart, filterPart)
+			sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("86")).Render(viewInfo))
+			sb.WriteString("\n")
+
+			// Status bar / commands (only shown when showCommands is true)
+			// Todo: remove m.showCommands?
+			if m.showCommands {
+				commands := []string{
+					"q: quit",
+					"t: toggle status",
+					"a: add task",
+					"e: edit task",
+					"d: delete task",
+					"ctrl+v: toggle view mode",
+					"ctrl+p: calendar view",
+					"ctrl+d: show done tasks",
+					"ctrl+u: show undone tasks",
+					"ctrl+f: search tasks",
+				}
+
+				// Only show day navigation commands when in today view mode
+				// Todo: why only show these commands when in today view mode?
+				if m.viewMode == TodayViewMode {
+					commands = append(commands,
+						"ctrl+←: previous day",
+						"ctrl+→: next day",
+						"ctrl+shift+←: previous day with tasks",
+						"ctrl+shift+→: next day with tasks")
+				}
+
+				sb.WriteString(statusBar.Render(strings.Join(commands, " | ")))
+			}
 		}
 
 	case AddMode:
@@ -1373,6 +1467,67 @@ func (m Model) View() string {
 		sb.WriteString(m.searchInput.View())
 		sb.WriteString("\n\n")
 		sb.WriteString(statusBar.Render("Enter: search • Esc: cancel"))
+
+	case CommandsViewMode:
+		// Fullscreen commands view
+		sb.WriteString(lipgloss.NewStyle().Bold(true).Render("Available Commands"))
+		sb.WriteString("\n\n")
+
+		// Define a style for command keys
+		keyStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("205")).
+			Bold(true)
+
+		// Define a style for command descriptions
+		descStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("86"))
+
+		// Function to add a command to the view
+		addCommand := func(binding key.Binding) {
+			// Get the key and help text
+			keyStr := binding.Help().Key
+			helpStr := binding.Help().Desc
+
+			// Append the formatted command
+			sb.WriteString(fmt.Sprintf("%s: %s\n",
+				descStyle.Render(helpStr),
+				keyStyle.Render(keyStr)))
+		}
+
+		// Add all commands line by line
+		addCommand(keys.Quit)
+		addCommand(keys.ToggleShowCommands)
+		addCommand(keys.ToggleStatus)
+		addCommand(keys.AddTask)
+		addCommand(keys.EditTask)
+		addCommand(keys.DeleteTask)
+		addCommand(keys.ToggleViewMode)
+		addCommand(keys.ShowDoneTasks)
+		addCommand(keys.ShowUndoneTasks)
+		addCommand(keys.SearchTasks)
+
+		// Navigation commands
+		sb.WriteString("\n")
+		sb.WriteString(lipgloss.NewStyle().Bold(true).Render("Navigation Commands"))
+		sb.WriteString("\n\n")
+
+		addCommand(keys.PrevDay)
+		addCommand(keys.NextDay)
+		addCommand(keys.PrevDayWithTasks)
+		addCommand(keys.NextDayWithTasks)
+
+		// Calendar commands
+		sb.WriteString("\n")
+		sb.WriteString(lipgloss.NewStyle().Bold(true).Render("Calendar Commands"))
+		sb.WriteString("\n\n")
+
+		addCommand(keys.ToggleCalendarView)
+		addCommand(keys.PrevMonth)
+		addCommand(keys.NextMonth)
+
+		// Add a footer
+		sb.WriteString("\n\n")
+		sb.WriteString(statusBar.Render("Press ESC to return to normal view"))
 	}
 
 	// Error message if any

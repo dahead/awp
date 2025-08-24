@@ -45,7 +45,7 @@ A simple CLI todo application written in Go that uses sqlite3 for task managemen
 The application can be configured in two ways:
 
 1. Command-line flags:
-   - `--database`: Path to the PostgreSQL database
+   - `--verbose`: Debug output to /tmp/
 
 2. Configuration file:
 ```
@@ -104,7 +104,9 @@ The application has a simple, clean interface:
   - ctrl+u: Show only undone tasks
   - ctrl+f: Search tasks
   - ctrl+←: View tasks due on the previous day
+  - ctrl+shift+←: Jump to a previous day with tasks
   - ctrl+→: View tasks due on the next day
+  - ctrl+shift+→: Jump to a next day with tasks
 
 ## Development
 
