@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -15,25 +16,26 @@ import (
 	"github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/spf13/viper"
 )
 
 // Config holds the application configuration
 type Config struct {
-	Database      string `mapstructure:"database"`
-	CentralHotkey string `mapstructure:"central_hotkey"`
+	Database      string `json:"database"`
+	CentralHotkey string `json:"central_hotkey"`
 }
 
 // TodoItem represents a single todo task
 type TodoItem struct {
 	ID           int       `db:"id"`
 	Status       bool      `db:"status"`
+	Title        string    `db:"title"`
+	Description  string    `db:"description"`
 	Created      time.Time `db:"created"`
 	LastModified time.Time `db:"lastmodified"`
 	DueDate      time.Time `db:"duedate"`
-	Title        string    `db:"title"`
-	Description  string    `db:"description"`
 	Tags         []string  `db:"tags"`
+	Projects     []string  `db:"projects"`
+	Contexts     []string  `db:"contexts"`
 }
 
 // InputMode represents the current input mode
@@ -74,11 +76,11 @@ type Model struct {
 	err           error
 
 	// View state
-	viewMode     ViewMode
-	taskFilter   TaskFilter
-	showAllTasks bool // For backward compatibility, will be removed later
-	viewDate     time.Time
-	searchTerm   string // For search functionality
+	viewMode   ViewMode
+	taskFilter TaskFilter
+	// showAllTasks bool // For backward compatibility, will be removed later
+	viewDate   time.Time
+	searchTerm string // For search functionality
 
 	// Form state
 	mode         InputMode
@@ -86,7 +88,7 @@ type Model struct {
 	descInput    textinput.Model
 	tagsInput    textinput.Model
 	dueDateInput textinput.Model
-	searchInput  textinput.Model // For search functionality
+	searchInput  textinput.Model
 	activeInput  int
 
 	// Edit/delete state
@@ -98,10 +100,10 @@ var (
 			BorderStyle(lipgloss.NormalBorder()).
 			BorderForeground(lipgloss.Color("240"))
 
-	titleStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("205")).
-			Bold(true).
-			PaddingLeft(1)
+	//titleStyle = lipgloss.NewStyle().
+	//		Foreground(lipgloss.Color("205")).
+	//		Bold(true).
+	//		PaddingLeft(1)
 
 	statusBar = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("205")).
@@ -182,11 +184,11 @@ var keys = defaultKeyMap()
 
 func main() {
 	// Parse command line flags
-	dbPath := flag.String("database", "", "Path to database file")
+	configPath := flag.String("config", "", "Path to configuration file")
 	flag.Parse()
 
 	// Load configuration
-	config, err := loadConfig(*dbPath)
+	config, err := loadConfig(*configPath)
 	if err != nil {
 		fmt.Printf("Error loading config: %v\n", err)
 		os.Exit(1)
@@ -214,7 +216,7 @@ func main() {
 	}
 }
 
-func loadConfig(dbPath string) (Config, error) {
+func loadConfig(configPath string) (Config, error) {
 	// Get user's home directory for storing the database
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
@@ -223,44 +225,49 @@ func loadConfig(dbPath string) (Config, error) {
 
 	// Default SQLite database in user's home directory
 	defaultDbPath := filepath.Join(homeDir, ".config", "awp", "todo.db")
+	configDir := filepath.Join(homeDir, ".config", "awp")
+	defaultConfigPath := filepath.Join(configDir, "config.json")
 
+	// Default configuration
 	config := Config{
 		Database:      defaultDbPath,
 		CentralHotkey: "ctrl+b",
 	}
 
-	// Setup viper
-	viper.SetConfigName("config")
-	viper.SetConfigType("json")
-	viper.AddConfigPath(filepath.Join(os.Getenv("HOME"), ".config", "awp"))
-
-	// Read config file
-	if err := viper.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
-			return config, err
-		}
-		// Config file not found, create default config
-		if err := os.MkdirAll(filepath.Join(os.Getenv("HOME"), ".config", "awp"), 0755); err != nil {
-			return config, err
-		}
-		viper.Set("database", config.Database)
-		viper.Set("central_hotkey", config.CentralHotkey)
-		if err := viper.WriteConfigAs(filepath.Join(os.Getenv("HOME"), ".config", "awp", "config.json")); err != nil {
-			return config, err
-		}
+	// If configPath is empty, use the default path
+	if configPath == "" {
+		configPath = defaultConfigPath
 	}
 
-	// Override with command-line flag if provided
-	if dbPath != "" {
-		config.Database = dbPath
+	// Try to read the config file
+	configData, err := os.ReadFile(configPath)
+	if err != nil {
+		// If the file doesn't exist, create it with default values
+		if os.IsNotExist(err) {
+			// Create the config directory if it doesn't exist
+			if err := os.MkdirAll(configDir, 0755); err != nil {
+				return config, err
+			}
+
+			// Marshal the default config to JSON
+			configData, err = json.MarshalIndent(config, "", "  ")
+			if err != nil {
+				return config, err
+			}
+
+			// Write the default config file
+			if err := os.WriteFile(configPath, configData, 0644); err != nil {
+				return config, err
+			}
+		} else {
+			// Some other error occurred while reading the file
+			return config, err
+		}
 	} else {
-		if viper.IsSet("database") {
-			config.Database = viper.GetString("database")
+		// File exists, parse it
+		if err := json.Unmarshal(configData, &config); err != nil {
+			return config, err
 		}
-	}
-
-	if viper.IsSet("central_hotkey") {
-		config.CentralHotkey = viper.GetString("central_hotkey")
 	}
 
 	return config, nil
@@ -291,7 +298,9 @@ func ensureSchema(db *sql.DB) error {
 			duedate TIMESTAMP,
 			title TEXT NOT NULL,
 			description TEXT,
-			tags TEXT
+			tags TEXT,
+			projects TEXT,
+			contexts TEXT
 		)
 	`)
 	return err
@@ -299,8 +308,7 @@ func ensureSchema(db *sql.DB) error {
 
 func initialModel(db *sql.DB) Model {
 	columns := []table.Column{
-		{Title: "Status", Width: 10},
-		{Title: "Description", Width: 50},
+		{Title: "Todo", Width: 60},
 	}
 
 	t := table.New(
@@ -360,9 +368,9 @@ func initialModel(db *sql.DB) Model {
 		activeInput:  0,
 		viewMode:     TodayViewMode,  // Default view mode shows today's tasks
 		taskFilter:   AllTasksFilter, // Default to showing all tasks (both done and undone)
-		showAllTasks: false,          // Keep for backward compatibility
-		viewDate:     time.Now(),
-		searchTerm:   "", // Initialize empty search term
+		// showAllTasks: false,          // Keep for backward compatibility
+		viewDate:   time.Now(),
+		searchTerm: "", // Initialize empty search term
 	}
 
 	// Load initial data
@@ -434,6 +442,10 @@ func (m *Model) submitForm() {
 		}
 	}
 
+	// Parse projects and contexts from description
+	projects := parseProjects(desc)
+	contexts := parseContexts(desc)
+
 	// Parse due date
 	var parsedDueDate time.Time
 	var err error
@@ -457,6 +469,8 @@ func (m *Model) submitForm() {
 			Title:       title,
 			Description: desc,
 			Tags:        cleanedTags,
+			Projects:    projects,
+			Contexts:    contexts,
 		}
 
 		// Insert new task using the database function
@@ -474,6 +488,8 @@ func (m *Model) submitForm() {
 			m.editingItem.Description = desc
 			m.editingItem.Tags = cleanedTags
 			m.editingItem.DueDate = parsedDueDate
+			m.editingItem.Projects = projects
+			m.editingItem.Contexts = contexts
 
 			// Update using the database function
 			err := updateTask(m.db, *m.editingItem)
@@ -494,7 +510,7 @@ func (m *Model) submitForm() {
 // Database operation functions
 func loadTasks(db *sql.DB, whereClause string) ([]TodoItem, error) {
 	query := `
-		SELECT id, status, created, lastmodified, duedate, title, description, tags
+		SELECT id, status, title, description, created, lastmodified, duedate, tags, projects, contexts
 		FROM todos
 	`
 	if whereClause != "" {
@@ -512,18 +528,22 @@ func loadTasks(db *sql.DB, whereClause string) ([]TodoItem, error) {
 
 	for rows.Next() {
 		var item TodoItem
-		var tagsStr string
 		var dueDate sql.NullTime
+		var tagsStr string
+		var projectsStr string
+		var contextsStr string
 
 		if err := rows.Scan(
 			&item.ID,
 			&item.Status,
+			&item.Title,
+			&item.Description,
 			&item.Created,
 			&item.LastModified,
 			&dueDate,
-			&item.Title,
-			&item.Description,
 			&tagsStr,
+			&projectsStr,
+			&contextsStr,
 		); err != nil {
 			return nil, err
 		}
@@ -545,6 +565,32 @@ func loadTasks(db *sql.DB, whereClause string) ([]TodoItem, error) {
 			item.Tags = []string{}
 		}
 
+		// Parse projects from comma-separated string
+		if projectsStr != "" {
+			// Split by comma
+			item.Projects = strings.Split(projectsStr, ",")
+
+			// Trim any whitespace from tags
+			for i, project := range item.Projects {
+				item.Projects[i] = strings.TrimSpace(project)
+			}
+		} else {
+			item.Projects = []string{}
+		}
+
+		// Parse contexts from comma-separated string
+		if contextsStr != "" {
+			// Split by comma
+			item.Contexts = strings.Split(contextsStr, ",")
+
+			// Trim any whitespace from tags
+			for i, context := range item.Contexts {
+				item.Contexts[i] = strings.TrimSpace(context)
+			}
+		} else {
+			item.Contexts = []string{}
+		}
+
 		items = append(items, item)
 	}
 
@@ -553,18 +599,31 @@ func loadTasks(db *sql.DB, whereClause string) ([]TodoItem, error) {
 
 func addTask(db *sql.DB, task TodoItem) error {
 	_, err := db.Exec(
-		`INSERT INTO todos (status, duedate, title, description, tags) 
-		 VALUES (?, ?, ?, ?, ?)`,
-		task.Status, task.DueDate, task.Title, task.Description, strings.Join(task.Tags, ","),
+		`INSERT INTO todos (status, title, description, created, lastmodified, duedate, tags, projects, contexts) 
+		 VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?, ?, ?, ?)`,
+		task.Status,
+		task.Title,
+		task.Description,
+		task.DueDate,
+		strings.Join(task.Tags, ","),
+		strings.Join(task.Projects, ","),
+		strings.Join(task.Contexts, ","),
 	)
 	return err
 }
 
 func updateTask(db *sql.DB, task TodoItem) error {
 	_, err := db.Exec(
-		`UPDATE todos SET title = ?, description = ?, tags = ?, duedate = ?, status = ?, lastmodified = CURRENT_TIMESTAMP 
+		`UPDATE todos SET status = ?, title = ?, description = ?, lastmodified = CURRENT_TIMESTAMP, duedate = ?, tags = ?, projects = ?, contexts = ? 
 		 WHERE id = ?`,
-		task.Title, task.Description, strings.Join(task.Tags, ","), task.DueDate, task.Status, task.ID,
+		task.Status,
+		task.Title,
+		task.Description,
+		task.DueDate,
+		strings.Join(task.Tags, ","),
+		strings.Join(task.Projects, ","),
+		strings.Join(task.Contexts, ","),
+		task.ID,
 	)
 	return err
 }
@@ -593,12 +652,12 @@ func (m *Model) loadTasks() {
 	case AllViewMode:
 		// Show all tasks (no date filter)
 		whereClause = ""
-		m.showAllTasks = true // For backward compatibility
+		// m.showAllTasks = true // For backward compatibility
 	case TodayViewMode:
 		// Show tasks for specific date
 		dateStr := m.viewDate.Format("2006-01-02")
 		whereClause = fmt.Sprintf("date(duedate) = date('%s')", dateStr)
-		m.showAllTasks = false // For backward compatibility
+		// m.showAllTasks = false // For backward compatibility
 	}
 
 	// Then, add the status part of the where clause based on task filter
@@ -654,7 +713,9 @@ func (m *Model) loadTasks() {
 			displayText = item.Title
 		}
 
-		tableRows = append(tableRows, table.Row{status, displayText})
+		// Combined display with just status and text
+		combinedText := fmt.Sprintf("%s %s", status, displayText)
+		tableRows = append(tableRows, table.Row{combinedText})
 	}
 
 	m.table.SetRows(tableRows)
@@ -689,16 +750,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			case key.Matches(msg, keys.ToggleStatus):
 				if len(m.items) > 0 && m.table.Cursor() < len(m.items) {
-					selectedRow := m.table.SelectedRow()
-					if selectedRow[0] == "[ ]" {
-						selectedRow[0] = "[x]"
-					} else {
-						selectedRow[0] = "[ ]"
-					}
-					rows := m.table.Rows()
-					rows[m.table.Cursor()] = selectedRow
-					m.table.SetRows(rows)
-
 					// Update in database
 					idx := m.table.Cursor()
 					if idx < len(m.items) {
@@ -707,6 +758,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						err := updateTaskStatus(m.db, m.items[idx].ID, m.items[idx].Status)
 						if err != nil {
 							m.err = err
+						} else {
+							// Update the display
+							selectedRow := m.table.SelectedRow()
+							statusPrefix := "[ ]"
+							if m.items[idx].Status {
+								statusPrefix = "[x]"
+							}
+
+							// Extract the text part (everything after the status)
+							text := selectedRow[0][4:] // Skip the status part "[ ] " or "[x] "
+
+							// Create the new row
+							selectedRow[0] = fmt.Sprintf("%s %s", statusPrefix, text)
+							rows := m.table.Rows()
+							rows[m.table.Cursor()] = selectedRow
+							m.table.SetRows(rows)
 						}
 					}
 				}
@@ -793,8 +860,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.resetInputs()
 				m.editingItem = nil
 
-			case "tab", "shift+tab":
+			case "tab":
 				m.focusNextInput()
+
+			//case "shift+tab":
+			//	m.focusPreviousInput()
 
 			case "enter":
 				if m.activeInput == 3 { // Submit on enter from the last field (due date)
@@ -971,7 +1041,7 @@ func (m Model) View() string {
 	case SearchMode:
 		sb.WriteString(lipgloss.NewStyle().Bold(true).Render("Search Tasks"))
 		sb.WriteString("\n\n")
-		sb.WriteString("Enter search term to find tasks by title or description:")
+		sb.WriteString("Enter search term to find tasks:")
 		sb.WriteString("\n\n")
 		sb.WriteString(m.searchInput.View())
 		sb.WriteString("\n\n")
@@ -984,6 +1054,36 @@ func (m Model) View() string {
 	}
 
 	return sb.String()
+}
+
+// parseProjects extracts all project tags (prefixed with +) from the description
+func parseProjects(description string) []string {
+	var projects []string
+	words := strings.Fields(description)
+
+	for _, word := range words {
+		if strings.HasPrefix(word, "+") && len(word) > 1 {
+			project := word[1:] // Remove the + prefix
+			projects = append(projects, project)
+		}
+	}
+
+	return projects
+}
+
+// parseContexts extracts all context tags (prefixed with @) from the description
+func parseContexts(description string) []string {
+	var contexts []string
+	words := strings.Fields(description)
+
+	for _, word := range words {
+		if strings.HasPrefix(word, "@") && len(word) > 1 {
+			context := word[1:] // Remove the @ prefix
+			contexts = append(contexts, context)
+		}
+	}
+
+	return contexts
 }
 
 // renderForm renders the input form for adding/editing tasks
