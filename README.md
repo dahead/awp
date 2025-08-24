@@ -22,8 +22,10 @@ A simple CLI todo application written in Go that uses sqlite3 for task managemen
 - Status (boolean): Whether the task is completed or not
 - Created/LastModified (datetime): When the task was created or last updated
 - Title/Description (string): Task title and details
-- Tags (string[]): List of tags associated with the task
 - Due (datetime): When the task is due to finish
+- Tags (string[]): List of tags associated with the task
+- Context (string[]): Context for the task
+- Project (string[]): Project for the task
 
 ## Installation
 
@@ -35,11 +37,11 @@ A simple CLI todo application written in Go that uses sqlite3 for task managemen
 ## Usage
 
 ```bash
-# Run with default database (todo.db)
+# Run with default database config
 ./awp
 
-# Specify a different database
-./awp --database my_todos.db
+# Specify a different config
+./awp --config ~/.config/awp/config.json
 ```
 
 ## Configuration
@@ -85,12 +87,14 @@ The application uses SQLite to store task data. The default database name is `to
 The schema includes a `todos` table with the following columns:
 - `id`: Serial primary key
 - `status`: Boolean indicating completion status
-- `created`: Timestamp of creation
-- `lastmodified`: Timestamp of last update
 - `title`: Text field for task title
 - `description`: Text field for task details
-- `tags`: Text array for task tags
+- `created`: Timestamp of creation
+- `lastmodified`: Timestamp of last update
 - `due`: Due date
+- `tags`: Text array for task tags
+- `context`: Context for the task
+- `project`: Project for the task
 
 ## User Interface
 
@@ -121,4 +125,3 @@ This project uses:
 - [bubbletea](https://github.com/charmbracelet/bubbletea) for terminal UI
 - [lipgloss](https://github.com/charmbracelet/lipgloss) for styling
 - [go-sqlite3](github.com/mattn/go-sqlite3) for sqlite3 connectivity
-- [viper](https://github.com/spf13/viper) for configuration management
