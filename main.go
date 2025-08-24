@@ -126,6 +126,8 @@ type keyMap struct {
 	SearchTasks        key.Binding
 	PrevDay            key.Binding
 	NextDay            key.Binding
+	PrevDayWithTasks   key.Binding
+	NextDayWithTasks   key.Binding
 }
 
 func defaultKeyMap() keyMap {
@@ -178,6 +180,14 @@ func defaultKeyMap() keyMap {
 			key.WithKeys("ctrl+right"),
 			key.WithHelp("ctrl+→", "next day"),
 		),
+		PrevDayWithTasks: key.NewBinding(
+			key.WithKeys("ctrl+shift+left"),
+			key.WithHelp("ctrl+shift+←", "previous day with tasks"),
+		),
+		NextDayWithTasks: key.NewBinding(
+			key.WithKeys("ctrl+shift+right"),
+			key.WithHelp("ctrl+shift+→", "next day with tasks"),
+		),
 	}
 }
 
@@ -197,6 +207,8 @@ func configuredKeyMap(config Config) keyMap {
 		SearchTasks:        parseKeyBinding(config.KeyMap["SearchTasks"], "ctrl+f", "search tasks"),
 		PrevDay:            parseKeyBinding(config.KeyMap["PrevDay"], "ctrl+left", "previous day"),
 		NextDay:            parseKeyBinding(config.KeyMap["NextDay"], "ctrl+right", "next day"),
+		PrevDayWithTasks:   parseKeyBinding(config.KeyMap["PrevDayWithTasks"], "ctrl+shift+left", "previous day with tasks"),
+		NextDayWithTasks:   parseKeyBinding(config.KeyMap["NextDayWithTasks"], "ctrl+shift+right", "next day with tasks"),
 	}
 	log("Finished parsing key bindings")
 	return km
@@ -381,6 +393,8 @@ func loadConfig(configPath string) (Config, error) {
 			"SearchTasks":        "ctrl+f",
 			"PrevDay":            "ctrl+left",
 			"NextDay":            "ctrl+right",
+			"PrevDayWithTasks":   "ctrl+shift+left",
+			"NextDayWithTasks":   "ctrl+shift+right",
 		},
 	}
 
@@ -904,6 +918,94 @@ func (m *Model) loadTodaysTasks() {
 	m.loadTasks()
 }
 
+// findPrevDayWithTasks finds the previous day that has tasks and updates viewDate
+func (m *Model) findPrevDayWithTasks() {
+	// Start from the day before current viewDate
+	startDate := m.viewDate.AddDate(0, 0, -1)
+
+	// Store original filter to restore it later
+	originalFilter := m.taskFilter
+
+	// Set filter to show all tasks to make sure we find any task
+	m.taskFilter = AllTasksFilter
+
+	// Keep looking back one day at a time until we find a day with tasks
+	// We'll limit the search to a year back to avoid infinite loops
+	for i := 0; i < 365; i++ {
+		testDate := startDate.AddDate(0, 0, -i)
+		dateStr := testDate.Format("2006-01-02")
+
+		// Query the database directly to check if there are tasks for this date
+		query := fmt.Sprintf("SELECT COUNT(*) FROM todos WHERE date(duedate) = date('%s')", dateStr)
+		row := m.db.QueryRow(query)
+
+		var count int
+		if err := row.Scan(&count); err != nil {
+			m.err = err
+			break
+		}
+
+		// If we found tasks for this date, update viewDate and load the tasks
+		if count > 0 {
+			m.viewDate = testDate
+			m.loadTasks()
+
+			// Restore original filter
+			m.taskFilter = originalFilter
+			m.loadTasks()
+			return
+		}
+	}
+
+	// If no day with tasks was found, just restore the filter
+	m.taskFilter = originalFilter
+	m.loadTasks()
+}
+
+// findNextDayWithTasks finds the next day that has tasks and updates viewDate
+func (m *Model) findNextDayWithTasks() {
+	// Start from the day after current viewDate
+	startDate := m.viewDate.AddDate(0, 0, 1)
+
+	// Store original filter to restore it later
+	originalFilter := m.taskFilter
+
+	// Set filter to show all tasks to make sure we find any task
+	m.taskFilter = AllTasksFilter
+
+	// Keep looking forward one day at a time until we find a day with tasks
+	// We'll limit the search to a year ahead to avoid infinite loops
+	for i := 0; i < 365; i++ {
+		testDate := startDate.AddDate(0, 0, i)
+		dateStr := testDate.Format("2006-01-02")
+
+		// Query the database directly to check if there are tasks for this date
+		query := fmt.Sprintf("SELECT COUNT(*) FROM todos WHERE date(duedate) = date('%s')", dateStr)
+		row := m.db.QueryRow(query)
+
+		var count int
+		if err := row.Scan(&count); err != nil {
+			m.err = err
+			break
+		}
+
+		// If we found tasks for this date, update viewDate and load the tasks
+		if count > 0 {
+			m.viewDate = testDate
+			m.loadTasks()
+
+			// Restore original filter
+			m.taskFilter = originalFilter
+			m.loadTasks()
+			return
+		}
+	}
+
+	// If no day with tasks was found, just restore the filter
+	m.taskFilter = originalFilter
+	m.loadTasks()
+}
+
 func (m Model) Init() tea.Cmd {
 	return nil
 }
@@ -1014,6 +1116,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.viewMode == TodayViewMode {
 					m.viewDate = m.viewDate.AddDate(0, 0, 1)
 					m.loadTasks()
+				}
+
+			case key.Matches(msg, keys.PrevDayWithTasks):
+				log("Key matched: PrevDayWithTasks")
+				if m.viewMode == TodayViewMode {
+					m.findPrevDayWithTasks()
+				}
+
+			case key.Matches(msg, keys.NextDayWithTasks):
+				log("Key matched: NextDayWithTasks")
+				if m.viewMode == TodayViewMode {
+					m.findNextDayWithTasks()
 				}
 
 			case key.Matches(msg, keys.ShowDoneTasks):
@@ -1215,7 +1329,11 @@ func (m Model) View() string {
 
 			// Only show day navigation commands when in today view mode
 			if m.viewMode == TodayViewMode {
-				commands = append(commands, "ctrl+←: previous day", "ctrl+→: next day")
+				commands = append(commands,
+					"ctrl+←: previous day",
+					"ctrl+→: next day",
+					"ctrl+shift+←: previous day with tasks",
+					"ctrl+shift+→: next day with tasks")
 			}
 
 			sb.WriteString(statusBar.Render(strings.Join(commands, " | ")))
