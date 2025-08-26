@@ -31,16 +31,15 @@ const (
 	ColorSelectedBg   = "57"  // Blue background for selected items
 	ColorError        = "9"   // Red text for error/delete messages
 
-	// Project and context tag colors
+	// Project and context colors
 	ColorProject = "2" // Green for project tags
 	ColorContext = "4" // Blue for context tags
 )
 
 // Config holds the application configuration
 type Config struct {
-	Database      string            `json:"database"`
-	CentralHotkey string            `json:"central_hotkey"`
-	KeyMap        map[string]string `json:"keymap"`
+	Database string            `json:"database"`
+	KeyMap   map[string]string `json:"keymap"`
 }
 
 // TodoItem represents a single todo task
@@ -52,7 +51,6 @@ type TodoItem struct {
 	Created      time.Time `db:"created"`
 	LastModified time.Time `db:"lastmodified"`
 	DueDate      time.Time `db:"duedate"`
-	Tags         []string  `db:"tags"`
 	Projects     []string  `db:"projects"`
 	Contexts     []string  `db:"contexts"`
 }
@@ -65,8 +63,8 @@ const (
 	AddMode
 	EditMode
 	DeleteConfirmMode
-	SearchMode       // Mode for searching tasks
-	CommandsViewMode // Mode for displaying commands
+	SearchMode   // Mode for searching tasks
+	HelpViewMode // Mode for displaying help
 )
 
 // ViewMode represents the current view mode for tasks
@@ -105,7 +103,6 @@ type Model struct {
 	mode         InputMode
 	titleInput   textinput.Model
 	descInput    textinput.Model
-	tagsInput    textinput.Model
 	dueDateInput textinput.Model
 	searchInput  textinput.Model
 	activeInput  int
@@ -127,30 +124,30 @@ var (
 
 // Define keymaps
 type keyMap struct {
-	ToggleShowCommands key.Binding
-	Quit               key.Binding
-	ToggleStatus       key.Binding
-	AddTask            key.Binding
-	EditTask           key.Binding
-	DeleteTask         key.Binding
-	ToggleViewMode     key.Binding
-	ShowDoneTasks      key.Binding
-	ShowUndoneTasks    key.Binding
-	SearchTasks        key.Binding
-	PrevDay            key.Binding
-	NextDay            key.Binding
-	PrevDayWithTasks   key.Binding
-	NextDayWithTasks   key.Binding
-	JumpToToday        key.Binding
+	ShowHelp         key.Binding
+	QuitApp          key.Binding
+	ToggleStatus     key.Binding
+	AddTask          key.Binding
+	EditTask         key.Binding
+	DeleteTask       key.Binding
+	ToggleViewMode   key.Binding
+	ShowDoneTasks    key.Binding
+	ShowUndoneTasks  key.Binding
+	SearchTasks      key.Binding
+	PrevDay          key.Binding
+	NextDay          key.Binding
+	PrevDayWithTasks key.Binding
+	NextDayWithTasks key.Binding
+	JumpToToday      key.Binding
 }
 
 func defaultKeyMap() keyMap {
 	return keyMap{
-		ToggleShowCommands: key.NewBinding(
+		ShowHelp: key.NewBinding(
 			key.WithKeys("ctrl+b"),
-			key.WithHelp("ctrl+b", "show/hide commands"),
+			key.WithHelp("ctrl+b", "Show help"),
 		),
-		Quit: key.NewBinding(
+		QuitApp: key.NewBinding(
 			key.WithKeys("q"),
 			key.WithHelp("q", "quit"),
 		),
@@ -213,21 +210,21 @@ func configuredKeyMap(config Config) keyMap {
 	// Parse key bindings from config
 	log("Parsing key bindings from configuration")
 	km := keyMap{
-		ToggleShowCommands: parseKeyBinding(config.KeyMap["ToggleShowCommands"], "ctrl+b", "show/hide commands"),
-		Quit:               parseKeyBinding(config.KeyMap["Quit"], "q", "quit"),
-		ToggleStatus:       parseKeyBinding(config.KeyMap["ToggleStatus"], "t", "toggle status"),
-		AddTask:            parseKeyBinding(config.KeyMap["AddTask"], "a", "add task"),
-		EditTask:           parseKeyBinding(config.KeyMap["EditTask"], "e", "edit task"),
-		DeleteTask:         parseKeyBinding(config.KeyMap["DeleteTask"], "d", "delete task"),
-		ToggleViewMode:     parseKeyBinding(config.KeyMap["ToggleViewMode"], "ctrl+v", "toggle between today's tasks and all tasks"),
-		ShowDoneTasks:      parseKeyBinding(config.KeyMap["ShowDoneTasks"], "ctrl+d", "show only done tasks"),
-		ShowUndoneTasks:    parseKeyBinding(config.KeyMap["ShowUndoneTasks"], "ctrl+u", "show only undone tasks"),
-		SearchTasks:        parseKeyBinding(config.KeyMap["SearchTasks"], "ctrl+f", "search tasks"),
-		PrevDay:            parseKeyBinding(config.KeyMap["PrevDay"], "ctrl+left", "previous day"),
-		NextDay:            parseKeyBinding(config.KeyMap["NextDay"], "ctrl+right", "next day"),
-		PrevDayWithTasks:   parseKeyBinding(config.KeyMap["PrevDayWithTasks"], "ctrl+shift+left", "previous day with tasks"),
-		NextDayWithTasks:   parseKeyBinding(config.KeyMap["NextDayWithTasks"], "ctrl+shift+right", "next day with tasks"),
-		JumpToToday:        parseKeyBinding(config.KeyMap["JumpToToday"], "ctrl+shift+right", "next day with tasks"),
+		ShowHelp:         parseKeyBinding(config.KeyMap["ShowHelp"], "ctrl+b", "show/hide commands"),
+		QuitApp:          parseKeyBinding(config.KeyMap["QuitApp"], "q", "quit"),
+		ToggleStatus:     parseKeyBinding(config.KeyMap["ToggleStatus"], "t", "toggle status"),
+		AddTask:          parseKeyBinding(config.KeyMap["AddTask"], "a", "add task"),
+		EditTask:         parseKeyBinding(config.KeyMap["EditTask"], "e", "edit task"),
+		DeleteTask:       parseKeyBinding(config.KeyMap["DeleteTask"], "d", "delete task"),
+		ToggleViewMode:   parseKeyBinding(config.KeyMap["ToggleViewMode"], "ctrl+v", "toggle between today's tasks and all tasks"),
+		ShowDoneTasks:    parseKeyBinding(config.KeyMap["ShowDoneTasks"], "ctrl+d", "show only done tasks"),
+		ShowUndoneTasks:  parseKeyBinding(config.KeyMap["ShowUndoneTasks"], "ctrl+u", "show only undone tasks"),
+		SearchTasks:      parseKeyBinding(config.KeyMap["SearchTasks"], "ctrl+f", "search tasks"),
+		PrevDay:          parseKeyBinding(config.KeyMap["PrevDay"], "ctrl+left", "previous day"),
+		NextDay:          parseKeyBinding(config.KeyMap["NextDay"], "ctrl+right", "next day"),
+		PrevDayWithTasks: parseKeyBinding(config.KeyMap["PrevDayWithTasks"], "ctrl+shift+left", "previous day with tasks"),
+		NextDayWithTasks: parseKeyBinding(config.KeyMap["NextDayWithTasks"], "ctrl+shift+right", "next day with tasks"),
+		JumpToToday:      parseKeyBinding(config.KeyMap["JumpToToday"], "ctrl+shift+right", "next day with tasks"),
 	}
 	log("Finished parsing key bindings")
 	return km
@@ -309,9 +306,9 @@ var (
 )
 
 // log prints debug messages to the log file if verbose mode is enabled
-func log(format string, args ...interface{}) {
+func log(text string, args ...interface{}) {
 	if isVerbose && logFile != nil {
-		fmt.Fprintf(logFile, "[DEBUG] "+format+"\n", args...)
+		fmt.Fprintf(logFile, text+"\n", args...)
 	}
 }
 
@@ -320,9 +317,9 @@ func initLogger(verbose bool) {
 	isVerbose = verbose
 
 	if verbose {
-		// Create log filename with current date and time
+		// Create log filename with current date
 		now := time.Now()
-		logFileName := fmt.Sprintf("/tmp/awp_%s.log", now.Format("2006-01-02_15-04"))
+		logFileName := fmt.Sprintf("/tmp/awp_%s.log", now.Format("2006-01-02"))
 
 		var err error
 		logFile, err = os.Create(logFileName)
@@ -336,6 +333,9 @@ func initLogger(verbose bool) {
 }
 
 func main() {
+	//
+	log("=== Starting AWP ===")
+
 	// Parse command line flags
 	configPath := flag.String("config", "", "Path to configuration file")
 	verbose := flag.Bool("verbose", false, "Enable verbose logging")
@@ -397,24 +397,23 @@ func loadConfig(configPath string) (Config, error) {
 
 	// Default configuration
 	config := Config{
-		Database:      defaultDbPath,
-		CentralHotkey: "ctrl+b",
+		Database: defaultDbPath,
 		KeyMap: map[string]string{
-			"ToggleShowCommands": "ctrl+b",
-			"Quit":               "q",
-			"ToggleStatus":       "space",
-			"AddTask":            "a",
-			"EditTask":           "e",
-			"DeleteTask":         "d",
-			"ToggleViewMode":     "ctrl+v",
-			"ShowDoneTasks":      "ctrl+d",
-			"ShowUndoneTasks":    "ctrl+u",
-			"SearchTasks":        "ctrl+f",
-			"PrevDay":            "ctrl+left",
-			"NextDay":            "ctrl+right",
-			"PrevDayWithTasks":   "ctrl+shift+left",
-			"NextDayWithTasks":   "ctrl+shift+right",
-			"JumpToToday":        "h",
+			"ShowHelp":         "ctrl+b",
+			"QuitApp":          "q",
+			"ToggleStatus":     "space",
+			"AddTask":          "a",
+			"EditTask":         "e",
+			"DeleteTask":       "d",
+			"ToggleViewMode":   "ctrl+v",
+			"ShowDoneTasks":    "ctrl+d",
+			"ShowUndoneTasks":  "ctrl+u",
+			"SearchTasks":      "ctrl+f",
+			"PrevDay":          "ctrl+left",
+			"NextDay":          "ctrl+right",
+			"PrevDayWithTasks": "ctrl+shift+left",
+			"NextDayWithTasks": "ctrl+shift+right",
+			"JumpToToday":      "h",
 		},
 	}
 
@@ -494,7 +493,6 @@ func ensureSchema(db *sql.DB) error {
 			duedate TIMESTAMP,
 			title TEXT NOT NULL,
 			description TEXT,
-			tags TEXT,
 			projects TEXT,
 			contexts TEXT
 		)
@@ -538,10 +536,6 @@ func initialModel(db *sql.DB) Model {
 	descInput.Placeholder = "Description"
 	descInput.Width = 40
 
-	tagsInput := textinput.New()
-	tagsInput.Placeholder = "Tags (comma separated)"
-	tagsInput.Width = 40
-
 	// Initialize due date input with today's date as default
 	dueDateInput := textinput.New()
 	dueDateInput.Placeholder = "Due Date (YYYY-MM-DD, optional)"
@@ -561,7 +555,6 @@ func initialModel(db *sql.DB) Model {
 		mode:         NormalMode,
 		titleInput:   titleInput,
 		descInput:    descInput,
-		tagsInput:    tagsInput,
 		dueDateInput: dueDateInput,
 		searchInput:  searchInput,
 		activeInput:  0,
@@ -581,69 +574,49 @@ func initialModel(db *sql.DB) Model {
 func (m *Model) resetInputs() {
 	m.titleInput.Reset()
 	m.descInput.Reset()
-	m.tagsInput.Reset()
-	// Set due date input to today's date
 	m.dueDateInput.SetValue(m.viewDate.Format("2006-01-02"))
 
 	m.activeInput = 0
 	m.titleInput.Focus()
 	m.descInput.Blur()
-	m.tagsInput.Blur()
 	m.dueDateInput.Blur()
 }
 
 // focusNextInput cycles through the form inputs
 func (m *Model) focusNextInput() {
-	m.activeInput = (m.activeInput + 1) % 4
-
+	m.activeInput = (m.activeInput + 1) % 3
 	switch m.activeInput {
 	case 0:
 		m.titleInput.Focus()
 		m.descInput.Blur()
-		m.tagsInput.Blur()
 		m.dueDateInput.Blur()
 	case 1:
 		m.titleInput.Blur()
 		m.descInput.Focus()
-		m.tagsInput.Blur()
 		m.dueDateInput.Blur()
 	case 2:
 		m.titleInput.Blur()
 		m.descInput.Blur()
-		m.tagsInput.Focus()
-		m.dueDateInput.Blur()
-	case 3:
-		m.titleInput.Blur()
-		m.descInput.Blur()
-		m.tagsInput.Blur()
 		m.dueDateInput.Focus()
 	}
 }
 
 // focusPreviousInput cycles through the form inputs
 func (m *Model) focusPreviousInput() {
-	m.activeInput = (m.activeInput - 1) % 4
+	m.activeInput = (m.activeInput - 1) % 3
 
 	switch m.activeInput {
 	case 0:
 		m.titleInput.Focus()
 		m.descInput.Blur()
-		m.tagsInput.Blur()
 		m.dueDateInput.Blur()
 	case 1:
 		m.titleInput.Blur()
 		m.descInput.Focus()
-		m.tagsInput.Blur()
 		m.dueDateInput.Blur()
 	case 2:
 		m.titleInput.Blur()
 		m.descInput.Blur()
-		m.tagsInput.Focus()
-		m.dueDateInput.Blur()
-	case 3:
-		m.titleInput.Blur()
-		m.descInput.Blur()
-		m.tagsInput.Blur()
 		m.dueDateInput.Focus()
 	}
 }
@@ -652,21 +625,7 @@ func (m *Model) focusPreviousInput() {
 func (m *Model) submitForm() {
 	title := strings.TrimSpace(m.titleInput.Value())
 	desc := strings.TrimSpace(m.descInput.Value())
-	tags := strings.Split(strings.TrimSpace(m.tagsInput.Value()), ",")
 	dueDate := strings.TrimSpace(m.dueDateInput.Value())
-
-	// Trim spaces from tags
-	for i, tag := range tags {
-		tags[i] = strings.TrimSpace(tag)
-	}
-
-	// Remove empty tags
-	cleanedTags := []string{}
-	for _, tag := range tags {
-		if tag != "" {
-			cleanedTags = append(cleanedTags, tag)
-		}
-	}
 
 	// Parse projects and contexts from title and description
 	projects := parseProjects(title)
@@ -696,7 +655,6 @@ func (m *Model) submitForm() {
 			DueDate:     parsedDueDate,
 			Title:       title,
 			Description: desc,
-			Tags:        cleanedTags,
 			Projects:    projects,
 			Contexts:    contexts,
 		}
@@ -714,7 +672,6 @@ func (m *Model) submitForm() {
 			// Update task with new values
 			m.editingItem.Title = title
 			m.editingItem.Description = desc
-			m.editingItem.Tags = cleanedTags
 			m.editingItem.DueDate = parsedDueDate
 			m.editingItem.Projects = projects
 			m.editingItem.Contexts = contexts
@@ -738,7 +695,7 @@ func (m *Model) submitForm() {
 // Database operation functions
 func loadTasks(db *sql.DB, whereClause string) ([]TodoItem, error) {
 	query := `
-		SELECT id, status, title, description, created, lastmodified, duedate, tags, projects, contexts
+		SELECT id, status, title, description, created, lastmodified, duedate, projects, contexts
 		FROM todos
 	`
 	if whereClause != "" {
@@ -757,7 +714,6 @@ func loadTasks(db *sql.DB, whereClause string) ([]TodoItem, error) {
 	for rows.Next() {
 		var item TodoItem
 		var dueDate sql.NullTime
-		var tagsStr string
 		var projectsStr string
 		var contextsStr string
 
@@ -769,7 +725,6 @@ func loadTasks(db *sql.DB, whereClause string) ([]TodoItem, error) {
 			&item.Created,
 			&item.LastModified,
 			&dueDate,
-			&tagsStr,
 			&projectsStr,
 			&contextsStr,
 		); err != nil {
@@ -778,19 +733,6 @@ func loadTasks(db *sql.DB, whereClause string) ([]TodoItem, error) {
 
 		if dueDate.Valid {
 			item.DueDate = dueDate.Time
-		}
-
-		// Parse tags from comma-separated string
-		if tagsStr != "" {
-			// Split by comma
-			item.Tags = strings.Split(tagsStr, ",")
-
-			// Trim any whitespace from tags
-			for i, tag := range item.Tags {
-				item.Tags[i] = strings.TrimSpace(tag)
-			}
-		} else {
-			item.Tags = []string{}
 		}
 
 		// Parse projects from comma-separated string
@@ -827,13 +769,12 @@ func loadTasks(db *sql.DB, whereClause string) ([]TodoItem, error) {
 
 func addTask(db *sql.DB, task TodoItem) error {
 	_, err := db.Exec(
-		`INSERT INTO todos (status, title, description, created, lastmodified, duedate, tags, projects, contexts) 
-		 VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?, ?, ?, ?)`,
+		`INSERT INTO todos (status, title, description, created, lastmodified, duedate, projects, contexts) 
+		 VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?, ?, ?)`,
 		task.Status,
 		task.Title,
 		task.Description,
 		task.DueDate,
-		strings.Join(task.Tags, ","),
 		strings.Join(task.Projects, ","),
 		strings.Join(task.Contexts, ","),
 	)
@@ -842,13 +783,12 @@ func addTask(db *sql.DB, task TodoItem) error {
 
 func updateTask(db *sql.DB, task TodoItem) error {
 	_, err := db.Exec(
-		`UPDATE todos SET status = ?, title = ?, description = ?, lastmodified = CURRENT_TIMESTAMP, duedate = ?, tags = ?, projects = ?, contexts = ? 
+		`UPDATE todos SET status = ?, title = ?, description = ?, lastmodified = CURRENT_TIMESTAMP, duedate = ?, projects = ?, contexts = ? 
 		 WHERE id = ?`,
 		task.Status,
 		task.Title,
 		task.Description,
 		task.DueDate,
-		strings.Join(task.Tags, ","),
 		strings.Join(task.Projects, ","),
 		strings.Join(task.Contexts, ","),
 		task.ID,
@@ -875,31 +815,34 @@ func (m *Model) loadTasks() {
 	var err error
 	var whereClause string
 
-	// First, set up the date part of the where clause based on view mode
+	// First, set up the viewMode and taskFilter parts of the where clause
 	switch m.viewMode {
 	case AllViewMode:
+		// In AllViewMode, initially no date filter
 		whereClause = ""
+
+		// Then, handle task filters within AllViewMode
+		switch m.taskFilter {
+		case AllTasksFilter:
+			// No additional filter needed for all tasks
+		case DoneTasksFilter:
+			whereClause = "status = 1" // SQLite uses 1 for true
+		case UndoneTasksFilter:
+			whereClause = "status = 0" // SQLite uses 0 for false
+		}
+
 	case TodayViewMode:
 		// Show tasks for specific date
 		dateStr := m.viewDate.Format("2006-01-02")
 		whereClause = fmt.Sprintf("date(duedate) = date('%s')", dateStr)
-	}
 
-	// Then, add the status part of the where clause based on task filter
-	switch m.taskFilter {
-	case AllTasksFilter:
-		// No additional filter needed
-		// whereClause = "status = 0 OR status = 1"
-	case DoneTasksFilter:
-		if whereClause == "" {
-			whereClause = "status = 1" // SQLite uses 1 for true
-		} else {
+		// Then, handle task filters within TodayViewMode
+		switch m.taskFilter {
+		case AllTasksFilter:
+			// No additional filter needed for all tasks
+		case DoneTasksFilter:
 			whereClause = whereClause + " AND status = 1"
-		}
-	case UndoneTasksFilter:
-		if whereClause == "" {
-			whereClause = "status = 0" // SQLite uses 0 for false
-		} else {
+		case UndoneTasksFilter:
 			whereClause = whereClause + " AND status = 0"
 		}
 	}
@@ -933,6 +876,8 @@ func (m *Model) loadTasks() {
 		}
 	}
 
+	log("LoadTasks whereClause: '%s'", whereClause)
+
 	// Load the tasks with the combined where clause
 	items, err = loadTasks(m.db, whereClause)
 
@@ -965,6 +910,7 @@ func (m *Model) loadTasks() {
 		tableRows = append(tableRows, table.Row{combinedText})
 	}
 
+	// Set table rows and update table
 	m.table.SetRows(tableRows)
 }
 
@@ -1073,27 +1019,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		log("Key pressed: %s", msg.String())
 		switch m.mode {
 		case NormalMode:
-			// Handle normal mode key presses
-			log("Handling key in NormalMode")
 			switch {
-			case key.Matches(msg, keys.ToggleShowCommands):
-				log("Key matched: ToggleShowCommands")
-				// Switch to CommandsViewMode instead of toggling showCommands
-				m.mode = CommandsViewMode
+			case key.Matches(msg, keys.ShowHelp):
+				m.mode = HelpViewMode
 
-			case key.Matches(msg, keys.Quit):
-				log("Key matched: Quit")
+			case key.Matches(msg, keys.QuitApp):
 				return m, tea.Quit
 
 			case key.Matches(msg, keys.JumpToToday):
-				log("Key matched: JumpToToday")
 				m.loadTodaysTasks()
 
 			case key.Matches(msg, keys.ToggleStatus):
-				log("Key matched: ToggleStatus")
 				if len(m.items) > 0 && m.table.Cursor() < len(m.items) {
 					// Update in database
 					idx := m.table.Cursor()
@@ -1127,12 +1065,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 
 			case key.Matches(msg, keys.AddTask):
-				log("Key matched: AddTask")
 				m.mode = AddMode
 				m.resetInputs()
 
 			case key.Matches(msg, keys.EditTask):
-				log("Key matched: EditTask")
 				if len(m.items) > 0 && m.table.Cursor() < len(m.items) {
 					m.mode = EditMode
 					m.editingItem = &m.items[m.table.Cursor()]
@@ -1141,7 +1077,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					// Populate form with existing values
 					m.titleInput.SetValue(m.editingItem.Title)
 					m.descInput.SetValue(m.editingItem.Description)
-					m.tagsInput.SetValue(strings.Join(m.editingItem.Tags, ", "))
 
 					// Format and set due date
 					if !m.editingItem.DueDate.IsZero() {
@@ -1150,14 +1085,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 
 			case key.Matches(msg, keys.DeleteTask):
-				log("Key matched: DeleteTask")
 				if len(m.items) > 0 && m.table.Cursor() < len(m.items) {
 					m.mode = DeleteConfirmMode
 					m.editingItem = &m.items[m.table.Cursor()]
 				}
 
 			case key.Matches(msg, keys.ToggleViewMode):
-				log("Key matched: ToggleViewMode")
 				// Toggle between today's tasks and all tasks
 				if m.viewMode == TodayViewMode {
 					m.viewMode = AllViewMode
@@ -1167,33 +1100,28 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.loadTasks()
 
 			case key.Matches(msg, keys.PrevDay):
-				log("Key matched: PrevDay")
 				if m.viewMode == TodayViewMode {
 					m.viewDate = m.viewDate.AddDate(0, 0, -1)
 					m.loadTasks()
 				}
 
 			case key.Matches(msg, keys.NextDay):
-				log("Key matched: NextDay")
 				if m.viewMode == TodayViewMode {
 					m.viewDate = m.viewDate.AddDate(0, 0, 1)
 					m.loadTasks()
 				}
 
 			case key.Matches(msg, keys.PrevDayWithTasks):
-				log("Key matched: PrevDayWithTasks")
 				if m.viewMode == TodayViewMode {
 					m.findPrevDayWithTasks()
 				}
 
 			case key.Matches(msg, keys.NextDayWithTasks):
-				log("Key matched: NextDayWithTasks")
 				if m.viewMode == TodayViewMode {
 					m.findNextDayWithTasks()
 				}
 
 			case key.Matches(msg, keys.ShowDoneTasks):
-				log("Key matched: ShowDoneTasks")
 				// Toggle between done tasks and all tasks
 				if m.taskFilter == DoneTasksFilter {
 					m.taskFilter = AllTasksFilter
@@ -1203,7 +1131,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.loadTasks()
 
 			case key.Matches(msg, keys.ShowUndoneTasks):
-				log("Key matched: ShowUndoneTasks")
 				// Toggle between undone tasks and all tasks
 				if m.taskFilter == UndoneTasksFilter {
 					m.taskFilter = AllTasksFilter
@@ -1213,7 +1140,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.loadTasks()
 
 			case key.Matches(msg, keys.SearchTasks):
-				log("Key matched: SearchTasks")
 				// Enter search mode
 				m.mode = SearchMode
 				m.searchInput.Focus()
@@ -1222,29 +1148,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case AddMode, EditMode:
-			// Handle input mode key presses
-			log("Handling key in %s", m.mode)
 			switch msg.String() {
-			case "esc":
-				log("Key pressed: esc (cancel input)")
+			case "ESC", "q":
 				m.mode = NormalMode
 				m.resetInputs()
 				m.editingItem = nil
 
 			case "tab":
-				log("Key pressed: tab (next input)")
 				m.focusNextInput()
 
 			case "shift+tab":
 				m.focusPreviousInput()
 
 			case "enter":
-				log("Key pressed: enter (input field %d)", m.activeInput)
-				if m.activeInput == 3 { // Submit on enter from the last field (due date)
-					log("Submitting form")
+				if m.activeInput == 2 { // Submit on enter from the last field (due date)
 					m.submitForm()
 				} else {
-					log("Moving to next input")
 					m.focusNextInput()
 				}
 			}
@@ -1258,26 +1177,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.descInput, cmd = m.descInput.Update(msg)
 				cmds = append(cmds, cmd)
 			case 2:
-				m.tagsInput, cmd = m.tagsInput.Update(msg)
-				cmds = append(cmds, cmd)
-			case 3:
 				m.dueDateInput, cmd = m.dueDateInput.Update(msg)
 				cmds = append(cmds, cmd)
 			}
 
 		case SearchMode:
 			// Handle search mode key presses
-			log("Handling key in SearchMode")
 			switch msg.String() {
-			case "esc":
-				log("Key pressed: esc (exit search)")
+			case "q":
 				// Exit search mode
 				m.mode = NormalMode
 				m.searchTerm = ""
 				m.loadTasks()
 
 			case "enter":
-				log("Key pressed: enter (perform search)")
 				// Perform search
 				m.searchTerm = m.searchInput.Value()
 				log("Searching for: %s", m.searchTerm)
@@ -1291,10 +1204,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case DeleteConfirmMode:
 			// Handle delete confirmation
-			log("Handling key in DeleteConfirmMode")
 			switch msg.String() {
 			case "y", "Y":
-				log("Key pressed: %s (confirm delete)", msg.String())
 				if m.editingItem != nil {
 					log("Deleting task ID: %d", m.editingItem.ID)
 					// Delete from database using the database function
@@ -1310,23 +1221,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.mode = NormalMode
 				m.editingItem = nil
 
-			case "n", "N", "esc":
-				log("Key pressed: %s (cancel delete)", msg.String())
+			case "n", "N", "q", "esc":
 				m.mode = NormalMode
 				m.editingItem = nil
 			}
 
-		case CommandsViewMode:
+		case HelpViewMode:
 			// Handle commands view mode key presses
-			log("Handling key in CommandsViewMode")
+			log("Handling key in HelpViewMode")
 			switch msg.String() {
-			case "esc":
-				log("Key pressed: esc (exit commands view)")
+			case "q":
 				// Exit commands view mode
 				m.mode = NormalMode
 
 			case "ctrl+b":
-				log("Key pressed: ctrl+b (exit commands view)")
 				// Exit commands view mode
 				m.mode = NormalMode
 			}
@@ -1385,39 +1293,15 @@ func (m Model) View() string {
 			filterPart = " (pending only)"
 		}
 
+		// show search filter
+		if m.searchTerm != "" {
+			filterPart = fmt.Sprintf(" (search filter: %s)", m.searchTerm)
+		}
+
 		// Combine the parts
 		viewInfo = fmt.Sprintf("Showing %s%s", viewModePart, filterPart)
 		sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(ColorNormalText)).Render(viewInfo))
 		sb.WriteString("\n")
-
-		//// Status bar / commands (only shown when showCommands is true)
-		//// Todo: remove m.showCommands?
-		//if m.showCommands {
-		//	commands := []string{
-		//		"q: quit",
-		//		"t: toggle status",
-		//		"a: add task",
-		//		"e: edit task",
-		//		"d: delete task",
-		//		"ctrl+v: toggle view mode",
-		//		"ctrl+p: calendar view",
-		//		"ctrl+d: show done tasks",
-		//		"ctrl+u: show undone tasks",
-		//		"ctrl+f: search tasks",
-		//	}
-		//
-		//	// Only show day navigation commands when in today view mode
-		//	// Todo: why only show these commands when in today view mode?
-		//	if m.viewMode == TodayViewMode {
-		//		commands = append(commands,
-		//			"ctrl+←: previous day",
-		//			"ctrl+→: next day",
-		//			"ctrl+shift+←: previous day with tasks",
-		//			"ctrl+shift+→: next day with tasks")
-		//	}
-		//
-		//	sb.WriteString(statusBar.Render(strings.Join(commands, " | ")))
-		//}
 
 	case AddMode:
 		sb.WriteString(lipgloss.NewStyle().Bold(true).Render("Add New Task"))
@@ -1454,7 +1338,7 @@ func (m Model) View() string {
 		sb.WriteString("\n\n")
 		sb.WriteString(statusBar.Render("Enter: search • Esc: cancel"))
 
-	case CommandsViewMode:
+	case HelpViewMode:
 		// Fullscreen commands view
 		sb.WriteString(lipgloss.NewStyle().Bold(true).Render("Available Commands"))
 		sb.WriteString("\n\n")
@@ -1481,8 +1365,8 @@ func (m Model) View() string {
 		}
 
 		// Add all commands line by line
-		addCommand(keys.Quit)
-		addCommand(keys.ToggleShowCommands)
+		addCommand(keys.QuitApp)
+		addCommand(keys.ShowHelp)
 		addCommand(keys.ToggleStatus)
 		addCommand(keys.AddTask)
 		addCommand(keys.EditTask)
@@ -1590,11 +1474,6 @@ func (m Model) renderForm() string {
 	// Description input
 	sb.WriteString("Description:\n")
 	sb.WriteString(m.descInput.View())
-	sb.WriteString("\n\n")
-
-	// Tags input
-	sb.WriteString("Tags (comma separated):\n")
-	sb.WriteString(m.tagsInput.View())
 	sb.WriteString("\n\n")
 
 	// Due date input

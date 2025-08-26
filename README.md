@@ -90,9 +90,8 @@ The schema includes a `todos` table with the following columns:
 - `created`: Timestamp of creation
 - `lastmodified`: Timestamp of last update
 - `due`: Due date
-- `tags`: Text array for task tags
-- `context`: Context for the task
-- `project`: Project for the task
+- `context`: Context tags for the task
+- `project`: Project tags for the task
 
 ## User Interface
 
