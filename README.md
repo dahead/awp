@@ -57,9 +57,8 @@ The application can be configured in two ways:
      ```json
     {
     "database": "~/.config/awp/todo.db",
-    "central_hotkey": "ctrl+b",
         "keymap": {
-            "ToggleShowCommands": "ctrl+b",
+            "ShowHelp": "ctrl+b",
             "Quit": "[\"q\", \"ctrl+c\"]",
             "ToggleStatus": "t",
             "AddTask": "[\"a\", \"insert\"]",
@@ -107,6 +106,7 @@ The application has a simple, clean interface:
   - e: Edit the selected task
   - d: Delete the selected task
   - h: Jump to today's tasks
+  - ctrl+b: Show help
   - ctrl+v: Toggle between today's tasks and all tasks
   - ctrl+d: Show only done tasks
   - ctrl+u: Show only undone tasks
