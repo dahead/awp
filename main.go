@@ -31,13 +31,6 @@ const (
 	ColorSelectedBg   = "57"  // Blue background for selected items
 	ColorError        = "9"   // Red text for error/delete messages
 
-	// Calendar specific colors
-	ColorWeekend     = "240" // Gray color for weekend days
-	ColorPastTasks   = "62"  // Muted blue for past tasks
-	ColorFutureTasks = "83"  // Green for future tasks
-	ColorTodayBg     = "205" // Same as accent color
-	ColorTodayText   = "0"   // Black text on today's highlight
-
 	// Project and context tag colors
 	ColorProject = "2" // Green for project tags
 	ColorContext = "4" // Blue for context tags
@@ -80,9 +73,8 @@ const (
 type ViewMode int
 
 const (
-	TodayViewMode    ViewMode = iota // Default - show tasks for today
-	AllViewMode                      // Show all tasks (no date filter)
-	CalendarViewMode                 // Show calendar view
+	TodayViewMode ViewMode = iota // Default - show tasks for today
+	AllViewMode                   // Show all tasks (no date filter)
 )
 
 // TaskFilter represents the current task filter mode
@@ -263,9 +255,9 @@ func parseKeyBinding(configKey, defaultKey, help string) key.Binding {
 		parts := strings.Split(configKey, ",")
 		for _, part := range parts {
 			// Trim whitespace and quotes
-			key := strings.Trim(part, " \"'")
-			if key != "" {
-				keys = append(keys, key)
+			k := strings.Trim(part, " \"'")
+			if k != "" {
+				keys = append(keys, k)
 			}
 		}
 
@@ -288,9 +280,9 @@ func parseKeyBinding(configKey, defaultKey, help string) key.Binding {
 		var commaKeys []string
 		parts := strings.Split(configKey, ",")
 		for _, part := range parts {
-			key := strings.TrimSpace(part)
-			if key != "" {
-				commaKeys = append(commaKeys, key)
+			k := strings.TrimSpace(part)
+			if k != "" {
+				commaKeys = append(commaKeys, k)
 			}
 		}
 
