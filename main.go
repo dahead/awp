@@ -1307,15 +1307,15 @@ func (m Model) View() string {
 		sb.WriteString(lipgloss.NewStyle().Bold(true).Render("Add New Task"))
 		sb.WriteString("\n\n")
 		sb.WriteString(m.renderForm())
-		sb.WriteString("\n\n")
-		sb.WriteString(statusBar.Render("Tab: next field • Enter: submit • Esc: cancel"))
+		// sb.WriteString("\n\n")
+		// sb.WriteString(statusBar.Render("Tab: next field • Enter: submit • Esc: cancel"))
 
 	case EditMode:
 		sb.WriteString(lipgloss.NewStyle().Bold(true).Render("Edit Task"))
 		sb.WriteString("\n\n")
 		sb.WriteString(m.renderForm())
-		sb.WriteString("\n\n")
-		sb.WriteString(statusBar.Render("Tab: next field • Enter: submit • Esc: cancel"))
+		// sb.WriteString("\n\n")
+		// sb.WriteString(statusBar.Render("Tab: next field • Enter: submit • Esc: cancel"))
 
 	case DeleteConfirmMode:
 		sb.WriteString(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ColorError)).Render("Delete Task"))
