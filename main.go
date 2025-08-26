@@ -98,9 +98,8 @@ type Model struct {
 	// View state
 	viewMode   ViewMode
 	taskFilter TaskFilter
-	// showAllTasks bool // For backward compatibility, will be removed later
 	viewDate   time.Time
-	searchTerm string // For search functionality
+	searchTerm string
 
 	// Form state
 	mode         InputMode
@@ -596,6 +595,34 @@ func (m *Model) resetInputs() {
 // focusNextInput cycles through the form inputs
 func (m *Model) focusNextInput() {
 	m.activeInput = (m.activeInput + 1) % 4
+
+	switch m.activeInput {
+	case 0:
+		m.titleInput.Focus()
+		m.descInput.Blur()
+		m.tagsInput.Blur()
+		m.dueDateInput.Blur()
+	case 1:
+		m.titleInput.Blur()
+		m.descInput.Focus()
+		m.tagsInput.Blur()
+		m.dueDateInput.Blur()
+	case 2:
+		m.titleInput.Blur()
+		m.descInput.Blur()
+		m.tagsInput.Focus()
+		m.dueDateInput.Blur()
+	case 3:
+		m.titleInput.Blur()
+		m.descInput.Blur()
+		m.tagsInput.Blur()
+		m.dueDateInput.Focus()
+	}
+}
+
+// focusPreviousInput cycles through the form inputs
+func (m *Model) focusPreviousInput() {
+	m.activeInput = (m.activeInput - 1) % 4
 
 	switch m.activeInput {
 	case 0:
@@ -1208,8 +1235,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				log("Key pressed: tab (next input)")
 				m.focusNextInput()
 
-			//case "shift+tab":
-			//	m.focusPreviousInput()
+			case "shift+tab":
+				m.focusPreviousInput()
 
 			case "enter":
 				log("Key pressed: enter (input field %d)", m.activeInput)
