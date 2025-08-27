@@ -1189,6 +1189,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.searchInput.Focus()
 				m.searchInput.SetValue("") // Clear previous search
 				return m, nil
+
+			case msg.String() == "/":
+				// Enter search mode when "/" is pressed
+				m.mode = SearchMode
+				m.searchInput.Focus()
+				m.searchInput.SetValue("") // Clear previous search
+				return m, nil
 			}
 
 		case AddMode, EditMode:
