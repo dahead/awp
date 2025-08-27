@@ -21,9 +21,8 @@ import (
 // Color constants for consistent styling across the application
 const (
 	// UI element colors
-	ColorBorder     = "240" // Border color for UI elements
-	ColorBackground = "237" // Background color for status bar
-	ColorAccent     = "205" // Pink accent color used in multiple places
+	ColorBorder = "240" // Border color for UI elements
+	ColorAccent = "205" // Pink accent color used in multiple places
 
 	// Text colors
 	ColorNormalText   = "86"  // Cyan text for help and view info
@@ -110,17 +109,6 @@ type Model struct {
 	// Edit/delete state
 	editingItem *TodoItem
 }
-
-var (
-	baseStyle = lipgloss.NewStyle().
-			BorderStyle(lipgloss.NormalBorder()).
-			BorderForeground(lipgloss.Color(ColorBorder))
-
-	statusBar = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(ColorAccent)).
-			Background(lipgloss.Color(ColorBackground)).
-			Padding(0, 1)
-)
 
 // Define keymaps
 type keyMap struct {
@@ -701,7 +689,9 @@ func loadTasks(db *sql.DB, whereClause string) ([]TodoItem, error) {
 	if whereClause != "" {
 		query += " WHERE " + whereClause
 	}
-	query += " ORDER BY created DESC"
+	query += " ORDER BY duedate DESC"
+
+	log("Query: '%s'", query)
 
 	rows, err := db.Query(query)
 	if err != nil {
@@ -737,10 +727,7 @@ func loadTasks(db *sql.DB, whereClause string) ([]TodoItem, error) {
 
 		// Parse projects from comma-separated string
 		if projectsStr != "" {
-			// Split by comma
 			item.Projects = strings.Split(projectsStr, ",")
-
-			// Trim any whitespace from tags
 			for i, project := range item.Projects {
 				item.Projects[i] = strings.TrimSpace(project)
 			}
@@ -750,10 +737,7 @@ func loadTasks(db *sql.DB, whereClause string) ([]TodoItem, error) {
 
 		// Parse contexts from comma-separated string
 		if contextsStr != "" {
-			// Split by comma
 			item.Contexts = strings.Split(contextsStr, ",")
-
-			// Trim any whitespace from tags
 			for i, context := range item.Contexts {
 				item.Contexts[i] = strings.TrimSpace(context)
 			}
@@ -875,8 +859,6 @@ func (m *Model) loadTasks() {
 			whereClause = whereClause + " AND " + searchClause
 		}
 	}
-
-	log("LoadTasks whereClause: '%s'", whereClause)
 
 	// Load the tasks with the combined where clause
 	items, err = loadTasks(m.db, whereClause)
@@ -1050,7 +1032,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							}
 
 							// Extract the text part (everything after the status)
-							text := selectedRow[0][4:] // Skip the status part "[ ] " or "[x] "
+							// text := selectedRow[0][4:] // Skip the status part "[ ] " or "[x] "
+							text := m.items[idx].Title
 
 							// Highlight project and context tags in the text
 							highlightedText := highlightProjectsAndContexts(text)
@@ -1149,7 +1132,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case AddMode, EditMode:
 			switch msg.String() {
-			case "ESC", "q":
+			case "esc":
 				m.mode = NormalMode
 				m.resetInputs()
 				m.editingItem = nil
@@ -1184,7 +1167,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case SearchMode:
 			// Handle search mode key presses
 			switch msg.String() {
-			case "q":
+			case "esc":
 				// Exit search mode
 				m.mode = NormalMode
 				m.searchTerm = ""
@@ -1221,16 +1204,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.mode = NormalMode
 				m.editingItem = nil
 
-			case "n", "N", "q", "esc":
+			case "n", "N", "esc":
 				m.mode = NormalMode
 				m.editingItem = nil
 			}
 
 		case HelpViewMode:
-			// Handle commands view mode key presses
-			log("Handling key in HelpViewMode")
 			switch msg.String() {
-			case "q":
+			case "esc":
 				// Exit commands view mode
 				m.mode = NormalMode
 
@@ -1266,6 +1247,10 @@ func (m Model) View() string {
 
 	switch m.mode {
 	case NormalMode:
+		baseStyle := lipgloss.NewStyle().
+			BorderStyle(lipgloss.NormalBorder()).
+			BorderForeground(lipgloss.Color(ColorBorder))
+
 		// Table with tasks
 		sb.WriteString(baseStyle.Render(m.table.View()))
 		sb.WriteString("\n")
@@ -1307,15 +1292,11 @@ func (m Model) View() string {
 		sb.WriteString(lipgloss.NewStyle().Bold(true).Render("Add New Task"))
 		sb.WriteString("\n\n")
 		sb.WriteString(m.renderForm())
-		// sb.WriteString("\n\n")
-		// sb.WriteString(statusBar.Render("Tab: next field • Enter: submit • Esc: cancel"))
 
 	case EditMode:
 		sb.WriteString(lipgloss.NewStyle().Bold(true).Render("Edit Task"))
 		sb.WriteString("\n\n")
 		sb.WriteString(m.renderForm())
-		// sb.WriteString("\n\n")
-		// sb.WriteString(statusBar.Render("Tab: next field • Enter: submit • Esc: cancel"))
 
 	case DeleteConfirmMode:
 		sb.WriteString(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ColorError)).Render("Delete Task"))
@@ -1335,8 +1316,6 @@ func (m Model) View() string {
 		sb.WriteString("Enter search term to find tasks:")
 		sb.WriteString("\n\n")
 		sb.WriteString(m.searchInput.View())
-		sb.WriteString("\n\n")
-		sb.WriteString(statusBar.Render("Enter: search • Esc: cancel"))
 
 	case HelpViewMode:
 		// Fullscreen commands view
@@ -1385,10 +1364,6 @@ func (m Model) View() string {
 		addCommand(keys.NextDay)
 		addCommand(keys.PrevDayWithTasks)
 		addCommand(keys.NextDayWithTasks)
-
-		// Add a footer
-		sb.WriteString("\n\n")
-		sb.WriteString(statusBar.Render("Press ESC to return to normal view"))
 	}
 
 	// Error message if any
@@ -1461,10 +1436,16 @@ func highlightProjectsAndContexts(text string) string {
 func (m Model) renderForm() string {
 	var sb strings.Builder
 
+	//formStyle := lipgloss.NewStyle().
+	//	Border(lipgloss.RoundedBorder()).
+	//	BorderForeground(lipgloss.Color(ColorBorder)).
+	//	Padding(1, 2)
+
 	formStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color(ColorBorder)).
-		Padding(1, 2)
+		Padding(1, 2).
+		Width(m.width - 4)
 
 	// Title input
 	sb.WriteString("Title:\n")
