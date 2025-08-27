@@ -18,27 +18,11 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-// Color constants for consistent styling across the application
-const (
-	// UI element colors
-	ColorBorder = "240" // Border color for UI elements
-	ColorAccent = "205" // Pink accent color used in multiple places
-
-	// Text colors
-	ColorNormalText   = "86"  // Cyan text for help and view info
-	ColorSelectedText = "229" // Yellow text for selected items
-	ColorSelectedBg   = "57"  // Blue background for selected items
-	ColorError        = "9"   // Red text for error/delete messages
-
-	// Project and context colors
-	ColorProject = "2" // Green for project tags
-	ColorContext = "4" // Blue for context tags
-)
-
 // Config holds the application configuration
 type Config struct {
-	Database string            `json:"database"`
-	KeyMap   map[string]string `json:"keymap"`
+	Database   string            `json:"database"`
+	KeyMap     map[string]string `json:"keymap"`
+	StylesFile string            `json:"styles_file"`
 }
 
 // TodoItem represents a single todo task
@@ -128,6 +112,25 @@ type keyMap struct {
 	NextDayWithTasks key.Binding
 	JumpToToday      key.Binding
 }
+
+// Styles holds the application colors and styling information
+type Styles struct {
+	// UI element colors
+	BorderColor string `json:"border_color"`
+	AccentColor string `json:"accent_color"`
+
+	// Text colors
+	NormalTextColor   string `json:"normal_text_color"`
+	SelectedTextColor string `json:"selected_text_color"`
+	SelectedBgColor   string `json:"selected_bg_color"`
+	ErrorColor        string `json:"error_color"`
+
+	// Project and context colors
+	ProjectColor string `json:"project_color"`
+	ContextColor string `json:"context_color"`
+}
+
+var styles Styles
 
 func defaultKeyMap() keyMap {
 	return keyMap{
@@ -219,13 +222,13 @@ func configuredKeyMap(config Config) keyMap {
 }
 
 func parseKeyBinding(configKey, defaultKey, help string) key.Binding {
-	log("Parsing key binding for '%s'", help)
+	log("parseKeyBinding: Parsing key binding for '%s'", help)
 
 	if configKey == "" {
-		log("No configured key for '%s', using default: %s", help, defaultKey)
+		log("parseKeyBinding: No configured key for '%s', using default: %s", help, defaultKey)
 		configKey = defaultKey
 	} else {
-		log("Using configured key for '%s': %s", help, configKey)
+		log("parseKeyBinding: Using configured key for '%s': %s", help, configKey)
 	}
 
 	// Handle JSON array format ["key1", "key2", "key3"] by removing brackets and quotes
@@ -245,14 +248,14 @@ func parseKeyBinding(configKey, defaultKey, help string) key.Binding {
 			}
 		}
 
-		log("Parsed keys from JSON array for '%s': %v", help, keys)
+		log("parseKeyBinding: Parsed keys from JSON array for '%s': %v", help, keys)
 
 		binding := key.NewBinding(
 			key.WithKeys(keys...),
 			key.WithHelp(strings.Join(keys, "/"), help),
 		)
 
-		log("Created key binding for '%s'", help)
+		log("parseKeyBinding: Created key binding for '%s'", help)
 		return binding
 	}
 
@@ -275,14 +278,14 @@ func parseKeyBinding(configKey, defaultKey, help string) key.Binding {
 		}
 	}
 
-	log("Parsed keys for '%s': %v", help, keys)
+	log("parseKeyBinding: Parsed keys for '%s': %v", help, keys)
 
 	binding := key.NewBinding(
 		key.WithKeys(keys...),
 		key.WithHelp(strings.Join(keys, "/"), help),
 	)
 
-	log("Created key binding for '%s'", help)
+	log("parseKeyBinding: Created key binding for '%s'", help)
 	return binding
 }
 
@@ -403,6 +406,7 @@ func loadConfig(configPath string) (Config, error) {
 			"NextDayWithTasks": "ctrl+shift+right",
 			"JumpToToday":      "h",
 		},
+		StylesFile: filepath.Join(configDir, "styles.json"),
 	}
 
 	// If configPath is empty, use the default path
@@ -441,7 +445,64 @@ func loadConfig(configPath string) (Config, error) {
 		}
 	}
 
+	// Now load the styles file
+	styles, err = loadStyles(config.StylesFile)
+	if err != nil {
+		return config, fmt.Errorf("error loading styles: %w", err)
+	}
+
 	return config, nil
+}
+
+func loadStyles(stylesPath string) (Styles, error) {
+	// Default styles that match the current constants
+	defaultStyles := Styles{
+		BorderColor:       "240",
+		AccentColor:       "205",
+		NormalTextColor:   "86",
+		SelectedTextColor: "229",
+		SelectedBgColor:   "57",
+		ErrorColor:        "9",
+		ProjectColor:      "2",
+		ContextColor:      "4",
+	}
+
+	// Try to read the styles file
+	stylesData, err := os.ReadFile(stylesPath)
+	if err != nil {
+		// If the file doesn't exist, create it with default values
+		if os.IsNotExist(err) {
+			// Create the directory if it doesn't exist
+			stylesDir := filepath.Dir(stylesPath)
+			if err := os.MkdirAll(stylesDir, 0755); err != nil {
+				return defaultStyles, err
+			}
+
+			// Marshal the default styles to JSON
+			stylesData, err = json.MarshalIndent(defaultStyles, "", "  ")
+			if err != nil {
+				return defaultStyles, err
+			}
+
+			// Write the default styles file
+			if err := os.WriteFile(stylesPath, stylesData, 0644); err != nil {
+				return defaultStyles, err
+			}
+
+			return defaultStyles, nil
+		} else {
+			// Some other error occurred
+			return defaultStyles, err
+		}
+	}
+
+	// File exists, parse it
+	var loadedStyles Styles
+	if err := json.Unmarshal(stylesData, &loadedStyles); err != nil {
+		return defaultStyles, err
+	}
+
+	return loadedStyles, nil
 }
 
 func connectDB(dbPath string) (*sql.DB, error) {
@@ -509,8 +570,8 @@ func initialModel(db *sql.DB) Model {
 		Foreground(lipgloss.NoColor{})        // No color (transparent)
 
 	s.Selected = s.Selected.
-		Foreground(lipgloss.Color(ColorSelectedText)).
-		Background(lipgloss.Color(ColorSelectedBg)).
+		Foreground(lipgloss.Color(styles.SelectedTextColor)).
+		Background(lipgloss.Color(styles.SelectedBgColor)).
 		Bold(true)
 	t.SetStyles(s)
 
@@ -1224,13 +1285,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.table.SetWidth(msg.Width - 4)
-
-		// Adjust table height based on whether commands are shown
-		if m.mode == NormalMode && !m.showCommands {
-			m.table.SetHeight(msg.Height - 6) // More space for tasks when commands are hidden
-		} else {
-			m.table.SetHeight(msg.Height - 10) // Less space when showing commands or in other modes
-		}
+		m.table.SetHeight(msg.Height - 4)
 	}
 
 	// Only update table in normal mode
@@ -1249,7 +1304,7 @@ func (m Model) View() string {
 	case NormalMode:
 		baseStyle := lipgloss.NewStyle().
 			BorderStyle(lipgloss.NormalBorder()).
-			BorderForeground(lipgloss.Color(ColorBorder))
+			BorderForeground(lipgloss.Color(styles.BorderColor))
 
 		// Table with tasks
 		sb.WriteString(baseStyle.Render(m.table.View()))
@@ -1285,7 +1340,7 @@ func (m Model) View() string {
 
 		// Combine the parts
 		viewInfo = fmt.Sprintf("Showing %s%s", viewModePart, filterPart)
-		sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(ColorNormalText)).Render(viewInfo))
+		sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(styles.NormalTextColor)).Render(viewInfo))
 		sb.WriteString("\n")
 
 	case AddMode:
@@ -1299,7 +1354,7 @@ func (m Model) View() string {
 		sb.WriteString(m.renderForm())
 
 	case DeleteConfirmMode:
-		sb.WriteString(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ColorError)).Render("Delete Task"))
+		sb.WriteString(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(styles.ErrorColor)).Render("Delete Task"))
 		sb.WriteString("\n\n")
 
 		if m.editingItem != nil {
@@ -1324,12 +1379,12 @@ func (m Model) View() string {
 
 		// Define a style for command keys
 		keyStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color(ColorAccent)).
+			Foreground(lipgloss.Color(styles.AccentColor)).
 			Bold(true)
 
 		// Define a style for command descriptions
 		descStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color(ColorNormalText))
+			Foreground(lipgloss.Color(styles.NormalTextColor))
 
 		// Function to add a command to the view
 		addCommand := func(binding key.Binding) {
@@ -1419,10 +1474,10 @@ func highlightProjectsAndContexts(text string) string {
 		// Check if word is a project tag (+project)
 		if strings.HasPrefix(word, "+") && len(word) > 1 {
 			// Highlight project with a different color (green)
-			result.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(ColorProject)).Render(word))
+			result.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(styles.ProjectColor)).Render(word))
 		} else if strings.HasPrefix(word, "@") && len(word) > 1 {
 			// Highlight context with a different color (blue)
-			result.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(ColorContext)).Render(word))
+			result.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(styles.ContextColor)).Render(word))
 		} else {
 			// Regular word, no highlighting
 			result.WriteString(word)
@@ -1443,7 +1498,7 @@ func (m Model) renderForm() string {
 
 	formStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color(ColorBorder)).
+		BorderForeground(lipgloss.Color(styles.BorderColor)).
 		Padding(1, 2).
 		Width(m.width - 4)
 
