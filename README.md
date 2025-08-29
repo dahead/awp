@@ -2,9 +2,13 @@
 
 A simple CLI todo application written in Go that uses sqlite3 for task management.
 
-Current Day view:
+Current day view:
 
 ![Screenshot](/media/screenshot.png)
+
+All tasks view:
+
+![Screenshot](/media/calendar_view.png)
 
 Calendar view:
 
