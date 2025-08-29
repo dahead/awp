@@ -1,6 +1,7 @@
 package database
 
 import (
+	"awp/pkg/utils"
 	"database/sql"
 	"fmt"
 	"strings"
@@ -72,6 +73,8 @@ func LoadTasks(db *sql.DB, whereClause string) ([]TodoItem, error) {
 		items = append(items, item)
 	}
 
+	utils.Log("Loaded %d tasks from database", len(items))
+
 	return items, nil
 }
 
@@ -87,6 +90,7 @@ func AddTask(db *sql.DB, task TodoItem) error {
 		strings.Join(task.Projects, ","),
 		strings.Join(task.Contexts, ","),
 	)
+	utils.Log("Added task: %s", task.ID)
 	return err
 }
 
@@ -103,6 +107,7 @@ func UpdateTask(db *sql.DB, task TodoItem) error {
 		strings.Join(task.Contexts, ","),
 		task.ID,
 	)
+	utils.Log("Updated task: %s", task.ID)
 	return err
 }
 
@@ -184,6 +189,8 @@ func BuildWhereClause(viewMode ViewMode, taskFilter TaskFilter, viewDate string,
 			whereClause = whereClause + " AND " + searchClause
 		}
 	}
+
+	utils.Log("Built where clause: %s", whereClause)
 
 	return whereClause
 }

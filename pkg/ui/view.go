@@ -132,6 +132,7 @@ func (m Model) View() string {
 		addCommand(m.keyMap.ShowDoneTasks)
 		addCommand(m.keyMap.ShowUndoneTasks)
 		addCommand(m.keyMap.SearchTasks)
+		addCommand(m.keyMap.ToggleCalendarView)
 
 		// Navigation commands
 		sb.WriteString("\n")
@@ -147,7 +148,12 @@ func (m Model) View() string {
 		sb.WriteString("\n")
 		sb.WriteString(lipgloss.NewStyle().Bold(true).Render("Calendar Commands"))
 		sb.WriteString("\n\n")
-		addCommand(m.keyMap.ToggleCalendarView)
+		addCommand(m.keyMap.CalendarLeft)
+		addCommand(m.keyMap.CalendarRight)
+		addCommand(m.keyMap.CalendarUp)
+		addCommand(m.keyMap.CalendarDown)
+		addCommand(m.keyMap.JumpToToday)
+
 	}
 
 	// Error message if any

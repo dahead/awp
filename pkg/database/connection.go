@@ -1,6 +1,7 @@
 package database
 
 import (
+	"awp/pkg/utils"
 	"database/sql"
 	"os"
 	"path/filepath"
@@ -19,6 +20,8 @@ func ConnectDB(dbPath string) (*sql.DB, error) {
 		}
 		dbPath = homeDir + dbPath[1:]
 	}
+
+	utils.Log("Connecting to database: %s", dbPath)
 
 	// Create the directory structure if it doesn't exist
 	dbDir := filepath.Dir(dbPath)
