@@ -70,10 +70,9 @@ Calendar view:
 
 # Add a task with context in the description
 ./awp --add "Buy milk. @shopping"
+```
 
 For more options, run ./awp --help or look at ![CLI reference](CLI-Command-Reference.md)
-
-```
 
 ## Configuration
 
