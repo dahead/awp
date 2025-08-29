@@ -8,7 +8,7 @@ Current day view:
 
 All tasks view:
 
-![Screenshot](/media/calendar_view.png)
+![Screenshot](/media/alltasksview.png)
 
 Calendar view:
 
