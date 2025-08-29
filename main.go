@@ -207,21 +207,21 @@ func defaultKeyMap() keyMap {
 			key.WithHelp("h", "jump to today"),
 		),
 		ToggleCalendarView: key.NewBinding(
-			key.WithKeys("ctrl+o"),
-			key.WithHelp("ctrl+o", "toggle calendar view")),
-		// Calendar navigation
+			key.WithKeys("ctrl+c"),
+			key.WithHelp("ctrl+c", "toggle calendar view")),
+		// Calendar navigation H = left, J = bottom, K = top, L = right
 		CalendarLeft: key.NewBinding(
-			key.WithKeys("left", "h"),
-			key.WithHelp("←/h", "move left in calendar")),
+			key.WithKeys("left"),
+			key.WithHelp("←", "move left in calendar")),
 		CalendarRight: key.NewBinding(
-			key.WithKeys("right", "l"),
-			key.WithHelp("→/l", "move right in calendar")),
+			key.WithKeys("right"),
+			key.WithHelp("→", "move right in calendar")),
 		CalendarUp: key.NewBinding(
-			key.WithKeys("up", "k"),
-			key.WithHelp("↑/k", "move up in calendar")),
+			key.WithKeys("up"),
+			key.WithHelp("↑", "move up in calendar")),
 		CalendarDown: key.NewBinding(
-			key.WithKeys("down", "j"),
-			key.WithHelp("↓/j", "move down in calendar")),
+			key.WithKeys("down"),
+			key.WithHelp("↓", "move down in calendar")),
 		CalendarSelect: key.NewBinding(
 			key.WithKeys("enter"),
 			key.WithHelp("enter", "select day in calendar")),
@@ -246,8 +246,13 @@ func configuredKeyMap(config Config) keyMap {
 		NextDay:            parseKeyBinding(config.KeyMap["NextDay"], "ctrl+right", "next day"),
 		PrevDayWithTasks:   parseKeyBinding(config.KeyMap["PrevDayWithTasks"], "ctrl+shift+left", "previous day with tasks"),
 		NextDayWithTasks:   parseKeyBinding(config.KeyMap["NextDayWithTasks"], "ctrl+shift+right", "next day with tasks"),
-		JumpToToday:        parseKeyBinding(config.KeyMap["JumpToToday"], "ctrl+shift+right", "next day with tasks"),
-		ToggleCalendarView: parseKeyBinding(config.KeyMap["ToggleCalendarView"], "ctrl+o", "toggle calendar view"),
+		JumpToToday:        parseKeyBinding(config.KeyMap["JumpToToday"], "h", "jump to today"),
+		ToggleCalendarView: parseKeyBinding(config.KeyMap["ToggleCalendarView"], "ctrl+c", "toggle calendar view"),
+		CalendarLeft:       parseKeyBinding(config.KeyMap["CalendarLeft"], "left", "move left in calendar"),
+		CalendarRight:      parseKeyBinding(config.KeyMap["CalendarRight"], "right", "move right in calendar"),
+		CalendarUp:         parseKeyBinding(config.KeyMap["CalendarUp"], "up", "move up in calendar"),
+		CalendarDown:       parseKeyBinding(config.KeyMap["CalendarDown"], "down", "move down in calendar"),
+		CalendarSelect:     parseKeyBinding(config.KeyMap["CalendarSelect"], "enter", "select day in calendar"),
 	}
 	log("Finished parsing key bindings")
 	return km
@@ -380,9 +385,9 @@ func main() {
 	}
 
 	// Initialize keys with configured keybindings
-	log("Initializing key bindings from configuration")
+	log("Initializing key bindings from configuration...")
 	keys = configuredKeyMap(config)
-	log("Key bindings initialized successfully")
+	log("Key bindings initialized successfully!")
 
 	// Connect to database
 	db, err := connectDB(config.Database)
@@ -407,6 +412,8 @@ func main() {
 }
 
 func loadConfig(configPath string) (Config, error) {
+	log("Loading configuration...")
+
 	// Get user's home directory for storing the database
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
@@ -422,21 +429,27 @@ func loadConfig(configPath string) (Config, error) {
 	config := Config{
 		Database: defaultDbPath,
 		KeyMap: map[string]string{
-			"ShowHelp":         "ctrl+b",
-			"QuitApp":          "q",
-			"ToggleStatus":     "space",
-			"AddTask":          "a",
-			"EditTask":         "e",
-			"DeleteTask":       "d",
-			"ToggleViewMode":   "ctrl+v",
-			"ShowDoneTasks":    "ctrl+d",
-			"ShowUndoneTasks":  "ctrl+u",
-			"SearchTasks":      "ctrl+f",
-			"PrevDay":          "ctrl+left",
-			"NextDay":          "ctrl+right",
-			"PrevDayWithTasks": "ctrl+shift+left",
-			"NextDayWithTasks": "ctrl+shift+right",
-			"JumpToToday":      "h",
+			"ShowHelp":           "ctrl+b",
+			"QuitApp":            "q",
+			"ToggleStatus":       "space",
+			"AddTask":            "a",
+			"EditTask":           "e",
+			"DeleteTask":         "d",
+			"ToggleViewMode":     "ctrl+v",
+			"ShowDoneTasks":      "ctrl+d",
+			"ShowUndoneTasks":    "ctrl+u",
+			"SearchTasks":        "ctrl+f",
+			"PrevDay":            "ctrl+left",
+			"NextDay":            "ctrl+right",
+			"PrevDayWithTasks":   "ctrl+shift+left",
+			"NextDayWithTasks":   "ctrl+shift+right",
+			"JumpToToday":        "h",
+			"ToggleCalendarView": "ctrl+c",
+			"CalendarLeft":       "left,h",
+			"CalendarRight":      "right,l",
+			"CalendarUp":         "up,k",
+			"CalendarDown":       "down,j",
+			"CalendarSelect":     "enter",
 		},
 		StylesFile: filepath.Join(configDir, "styles.json"),
 	}
@@ -445,6 +458,8 @@ func loadConfig(configPath string) (Config, error) {
 	if configPath == "" {
 		configPath = defaultConfigPath
 	}
+
+	log("Using config path: %s", configPath)
 
 	// Try to read the config file
 	configData, err := os.ReadFile(configPath)
@@ -483,10 +498,12 @@ func loadConfig(configPath string) (Config, error) {
 		return config, fmt.Errorf("error loading styles: %w", err)
 	}
 
+	log("Configuration loaded successfully!")
 	return config, nil
 }
 
 func loadStyles(stylesPath string) (Styles, error) {
+	log("Loading styles...")
 	// Default styles that match the current constants
 	defaultStyles := Styles{
 		BorderColor:       "240",
@@ -534,6 +551,7 @@ func loadStyles(stylesPath string) (Styles, error) {
 		return defaultStyles, err
 	}
 
+	log("Styles loaded successfully!")
 	return loadedStyles, nil
 }
 
@@ -1286,6 +1304,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.viewMode = TodayViewMode
 				m.loadTasks()
 
+			case msg.String() == "esc" && m.viewMode == CalendarViewMode:
+				// Return to today view from calendar
+				m.viewDate = time.Now()
+				m.viewMode = TodayViewMode
+				m.loadTasks()
+
 			case msg.String() == "/":
 				// Enter search mode when "/" is pressed
 				m.mode = SearchMode
@@ -1849,10 +1873,9 @@ func (m Model) renderCalendar() string {
 				hasTask := daysWithTasks[currentDay]
 
 				if isSelected {
-					// Selected day gets highest priority - use border and bold styling
-					dayStyle = dayStyle.Border(lipgloss.RoundedBorder()).
-						BorderForeground(lipgloss.Color(styles.AccentColor)).
-						Foreground(lipgloss.Color(styles.AccentColor)).Bold(true)
+					// Selected day gets highest priority - use background color instead of border
+					dayStyle = dayStyle.Background(lipgloss.Color(styles.AccentColor)).
+						Foreground(lipgloss.Color(styles.SelectedTextColor)).Bold(true)
 				} else if isToday {
 					dayStyle = dayStyle.Background(lipgloss.Color(styles.SelectedBgColor)).
 						Foreground(lipgloss.Color(styles.SelectedTextColor))
@@ -1877,7 +1900,7 @@ func (m Model) renderCalendar() string {
 	// Add navigation instructions
 	sb.WriteString("\n")
 	sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(styles.NormalTextColor)).Render(
-		"Navigate: ←→↑↓/hjkl  |  Select day: enter  |  Prev/Next month: ctrl+←→  |  Exit: ctrl+c"))
+		"Navigate: ←→↑↓  |  Select day: enter  |  Return to today: esc  |  Exit: ctrl+c"))
 
 	return sb.String()
 }
