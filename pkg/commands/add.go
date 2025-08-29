@@ -31,8 +31,12 @@ func HandleAddTask(db *sql.DB, taskText string, dateStr string) {
 	// Extract projects from task text (format: +project)
 	projects := extractProjects(taskText)
 
-	// Remove project tags from title for clean display
+	// Extract contexts from task text (format: @context)
+	contexts := extractContexts(taskText)
+
+	// Remove project and context tags from title for clean display
 	title := removeProjectTags(taskText)
+	title = removeContextTags(title)
 
 	// Create task
 	task := database.TodoItem{
@@ -41,7 +45,7 @@ func HandleAddTask(db *sql.DB, taskText string, dateStr string) {
 		Description: taskText, // Keep original text in description
 		DueDate:     dueDate,
 		Projects:    projects,
-		Contexts:    []string{}, // Empty contexts for now
+		Contexts:    contexts,
 	}
 
 	if err := database.AddTask(db, task); err != nil {
@@ -66,5 +70,22 @@ func extractProjects(text string) []string {
 // removeProjectTags removes +project tags from text for clean title
 func removeProjectTags(text string) string {
 	re := regexp.MustCompile(`\s*\+\w+\s*`)
+	return strings.TrimSpace(re.ReplaceAllString(text, " "))
+}
+
+// extractContexts finds all @context tags in text
+func extractContexts(text string) []string {
+	re := regexp.MustCompile(`@(\w+)`)
+	matches := re.FindAllStringSubmatch(text, -1)
+	var contexts []string
+	for _, match := range matches {
+		contexts = append(contexts, match[1])
+	}
+	return contexts
+}
+
+// removeContextTags removes @context tags from text for clean title
+func removeContextTags(text string) string {
+	re := regexp.MustCompile(`\s*@\w+\s*`)
 	return strings.TrimSpace(re.ReplaceAllString(text, " "))
 }

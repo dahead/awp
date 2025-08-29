@@ -48,6 +48,29 @@ Calendar view:
 
 # Specify a different config
 ./awp --config ~/.config/awp/config.json
+
+
+# Run with verbose output
+./awp --verbose
+
+# Add a task
+./awp --add "Buy milk"
+
+# Add a task with due date
+./awp --add "Buy milk" --due "2021-01-01"
+
+# Add a task with context
+./awp --add "Buy milk" --context "shopping"
+
+# Add a task with project
+./awp --add "Buy milk" --project "groceries"
+
+# Add a task with due date and context
+./awp --add "Buy milk" --due "2021-01-01" --context "shopping"
+
+# Add a task with context in the description
+./awp --add "Buy milk. @shopping"
+
 ```
 
 ## Configuration
