@@ -18,13 +18,11 @@ Calendar view:
 
 - Simple, clean user interface using bubbletea and lipgloss
 - Shows today's tasks by default, with option to view all tasks
-- Date navigation to view tasks due on specific days
+- Date/Month/Calendar navigation to view tasks due on specific days
 - Quick navigation with hotkeys (h to jump to today, ctrl+shift+arrow keys to navigate to days with tasks)
 - Filtering capabilities to show only done or undone tasks
 - Search functionality to find specific tasks
 - Stores data in a SQLite database
-- Central hotkey (CTRL+B) to show additional commands
-- Full CRUD operations for managing tasks
 
 ## Todo Item Properties
 
@@ -32,7 +30,6 @@ Calendar view:
 - Created/LastModified (datetime): When the task was created or last updated
 - Title/Description (string): Task title and details
 - Due (datetime): When the task is due to finish
-- Tags (string[]): List of tags associated with the task
 - Context (string[]): Context for the task
 - Project (string[]): Project for the task
 
@@ -58,7 +55,7 @@ Calendar view:
 The application can be configured in two ways:
 
 1. Command-line flags:
-   - `--verbose`: Debug output to /tmp/
+   - `--verbose`: Debug output to /tmp/awp_%date%.log
 
 2. Configuration file:
 ```
@@ -101,30 +98,6 @@ The schema includes a `todos` table with the following columns:
 - `due`: Due date
 - `context`: Context tags for the task
 - `project`: Project tags for the task
-
-## User Interface
-
-The application has a simple, clean interface:
-
-- Tasks are displayed in a table showing status and description
-- Additional commands are hidden by default
-- Press CTRL+B to toggle the visibility of command help
-- Commands:
-  - q: Quit the application
-  - t: Toggle task status
-  - a: Add a new task
-  - e: Edit the selected task
-  - d: Delete the selected task
-  - h: Jump to today's tasks
-  - ctrl+b: Show help
-  - ctrl+v: Toggle between today's tasks and all tasks
-  - ctrl+d: Show only done tasks
-  - ctrl+u: Show only undone tasks
-  - ctrl+f: Search tasks
-  - ctrl+←: View tasks due on the previous day
-  - ctrl+shift+←: Jump to a previous day with tasks
-  - ctrl+→: View tasks due on the next day
-  - ctrl+shift+→: Jump to a next day with tasks
 
 ## Development
 
