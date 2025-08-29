@@ -1,12 +1,12 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"awp/pkg/cli"
 	"awp/pkg/config"
 	"awp/pkg/database"
 	"awp/pkg/ui"
@@ -16,25 +16,19 @@ import (
 func main() {
 	utils.Log("=== Starting AWP ===")
 
-	// Parse command line flags
-	configPath := flag.String("config", "", "Path to configuration file")
-	verbose := flag.Bool("verbose", false, "Enable verbose logging")
-	flag.Parse()
+	// Parse command line arguments
+	args := cli.ParseArgs()
 
 	// Initialize logger
-	utils.InitLogger(*verbose)
-
-	// Close log file when application exits
+	utils.InitLogger(args.Verbose)
 	defer utils.CloseLogger()
 
 	// Load configuration and styles
-	cfg, styles, err := config.Load(*configPath)
+	cfg, styles, err := config.Load(args.ConfigPath)
 	if err != nil {
 		fmt.Printf("Error loading config: %v\n", err)
 		os.Exit(1)
 	}
-
-	utils.Log("Configuration loaded successfully!")
 
 	// Connect to database
 	db, err := database.ConnectDB(cfg.Database)
@@ -50,6 +44,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Handle CLI commands
+	if cli.HandleCommands(db, args) {
+		return
+	}
+
+	// If no CLI commands, launch the TUI
+	utils.Log("Configuration loaded successfully!")
 	utils.Log("Database connection established and schema ensured")
 
 	// Create the UI model
