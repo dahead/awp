@@ -145,6 +145,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.searchInput.SetValue("") // Clear previous search
 				return m, nil
 
+			case key.Matches(msg, m.keyMap.ToggleSortBy):
+				m.sortBy = (m.sortBy + 1) % 7 // Cycle through all sort options
+				m.loadTasks()
+
+			case key.Matches(msg, m.keyMap.ToggleGroupBy):
+				m.groupBy = (m.groupBy + 1) % 7 // Cycle through all group options
+				m.loadTasks()
+
+			case key.Matches(msg, m.keyMap.ToggleSortOrder):
+				if m.sortOrder == database.SortAsc {
+					m.sortOrder = database.SortDesc
+				} else {
+					m.sortOrder = database.SortAsc
+				}
+				m.loadTasks()
+
 			case key.Matches(msg, m.keyMap.ToggleCalendarView):
 				// Toggle calendar view mode
 				if m.viewMode == database.CalendarViewMode {

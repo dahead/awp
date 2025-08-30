@@ -57,6 +57,11 @@ type Model struct {
 	// Edit/delete state
 	editingItem *database.TodoItem
 
+	// Sorting and grouping state
+	sortBy    database.SortBy
+	groupBy   database.GroupBy
+	sortOrder database.SortOrder
+
 	calendarMonth       time.Time
 	calendarSelectedDay int // Selected day in calendar view (1-31)
 }

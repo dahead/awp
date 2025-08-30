@@ -33,6 +33,9 @@ var KeyDefinitions = map[string]KeyDefinition{
 	"CalendarUp":         {"up", "move up in calendar"},
 	"CalendarDown":       {"down", "move down in calendar"},
 	"CalendarSelect":     {"enter", "select day in calendar"},
+	"ToggleSortBy":       {"s", "cycle sort by"},
+	"ToggleGroupBy":      {"g", "cycle group by"},
+	"ToggleSortOrder":    {"o", "toggle sort order"},
 }
 
 type KeyMap struct {
@@ -57,6 +60,9 @@ type KeyMap struct {
 	CalendarUp         key.Binding
 	CalendarDown       key.Binding
 	CalendarSelect     key.Binding
+	ToggleSortBy       key.Binding
+	ToggleGroupBy      key.Binding
+	ToggleSortOrder    key.Binding
 }
 
 func BuildKeyMap(configOverrides map[string]string) KeyMap {
@@ -110,6 +116,12 @@ func BuildKeyMap(configOverrides map[string]string) KeyMap {
 			km.CalendarDown = parseKeyBinding(keyStr, def.DefaultKey, def.Help)
 		case "CalendarSelect":
 			km.CalendarSelect = parseKeyBinding(keyStr, def.DefaultKey, def.Help)
+		case "ToggleSortBy":
+			km.ToggleSortBy = parseKeyBinding(keyStr, def.DefaultKey, def.Help)
+		case "ToggleGroupBy":
+			km.ToggleGroupBy = parseKeyBinding(keyStr, def.DefaultKey, def.Help)
+		case "ToggleSortOrder":
+			km.ToggleSortOrder = parseKeyBinding(keyStr, def.DefaultKey, def.Help)
 		}
 	}
 	return km

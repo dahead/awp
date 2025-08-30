@@ -60,8 +60,26 @@ func (m Model) View() string {
 				filterPart = fmt.Sprintf(" (search filter: %s)", m.searchTerm)
 			}
 
+			// Add sorting/grouping info to view status
+			sortInfo := ""
+			if m.sortBy != database.SortByDueDate || m.groupBy != database.GroupByNone {
+				sortByStr := []string{"title", "description", "due date", "project", "context", "created", "status"}[m.sortBy]
+				orderStr := "asc"
+				if m.sortOrder == database.SortDesc {
+					orderStr = "desc"
+				}
+
+				groupByStr := ""
+				if m.groupBy != database.GroupByNone {
+					groupOptions := []string{"", "project", "context", "daily", "weekly", "monthly", "yearly"}
+					groupByStr = fmt.Sprintf(", grouped by %s", groupOptions[m.groupBy])
+				}
+
+				sortInfo = fmt.Sprintf(" | sorted by %s (%s)%s", sortByStr, orderStr, groupByStr)
+			}
+
 			// Combine the parts
-			viewInfo = fmt.Sprintf("Showing %s%s", viewModePart, filterPart)
+			viewInfo = fmt.Sprintf("Showing %s%s%s", viewModePart, filterPart, sortInfo)
 			sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(m.styles.NormalTextColor)).Render(viewInfo))
 			sb.WriteString("\n")
 		}
@@ -133,6 +151,11 @@ func (m Model) View() string {
 		addCommand(m.keyMap.ShowUndoneTasks)
 		addCommand(m.keyMap.SearchTasks)
 		addCommand(m.keyMap.ToggleCalendarView)
+
+		// add command for toggling sort by
+		addCommand(m.keyMap.ToggleSortBy)
+		addCommand(m.keyMap.ToggleGroupBy)
+		addCommand(m.keyMap.ToggleSortOrder)
 
 		// Navigation commands
 		sb.WriteString("\n")

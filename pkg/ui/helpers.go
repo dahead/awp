@@ -30,30 +30,46 @@ func (m *Model) loadTasks() {
 	}
 
 	m.items = items
+
+	// Apply grouping and sorting
+	groupedTasks := m.GroupTasks(items)
 	tableRows := []table.Row{}
 
-	for _, item := range m.items {
-		// Add to table rows
-		status := "[ ]"
-		if item.Status {
-			status = "[x]"
+	for _, group := range groupedTasks {
+		// Add group header if grouping is enabled
+		if m.groupBy != database.GroupByNone {
+			groupHeader := fmt.Sprintf("== %s ==", group.GroupName)
+			tableRows = append(tableRows, table.Row{
+				lipgloss.NewStyle().
+					Bold(true).
+					Foreground(lipgloss.Color(m.styles.AccentColor)).
+					Render(groupHeader),
+			})
 		}
 
-		// Use title if available, otherwise description
-		displayText := item.Description
-		if item.Title != "" {
-			displayText = item.Title
+		// Add tasks in the group
+		for _, item := range group.Tasks {
+			status := "[ ]"
+			if item.Status {
+				status = "[x]"
+			}
+
+			displayText := item.Description
+			if item.Title != "" {
+				displayText = item.Title
+			}
+
+			highlightedText := highlightProjectsAndContexts(displayText, m.styles)
+			combinedText := fmt.Sprintf("%s %s", status, highlightedText)
+			tableRows = append(tableRows, table.Row{combinedText})
 		}
 
-		// Highlight project and context tags in the display text
-		highlightedText := highlightProjectsAndContexts(displayText, m.styles)
-
-		// Combined display with just status and highlighted text
-		combinedText := fmt.Sprintf("%s %s", status, highlightedText)
-		tableRows = append(tableRows, table.Row{combinedText})
+		// Add empty line between groups
+		if m.groupBy != database.GroupByNone && len(groupedTasks) > 1 {
+			tableRows = append(tableRows, table.Row{""})
+		}
 	}
 
-	// Set table rows and update table
 	m.table.SetRows(tableRows)
 }
 

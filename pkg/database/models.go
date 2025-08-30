@@ -34,3 +34,37 @@ const (
 	DoneTasksFilter                     // Show only completed tasks
 	UndoneTasksFilter                   // Show only uncompleted tasks
 )
+
+// SortBy represents different sorting options
+type SortBy int
+
+const (
+	SortByTitle SortBy = iota
+	SortByDescription
+	SortByDueDate
+	SortByProject
+	SortByContext
+	SortByCreated
+	SortByStatus
+)
+
+// GroupBy represents different grouping options
+type GroupBy int
+
+const (
+	GroupByNone GroupBy = iota
+	GroupByProject
+	GroupByContext
+	GroupByDueDateDaily
+	GroupByDueDateWeekly
+	GroupByDueDateMonthly
+	GroupByDueDateYearly
+)
+
+// SortOrder represents sorting direction
+type SortOrder int
+
+const (
+	SortAsc SortOrder = iota
+	SortDesc
+)
