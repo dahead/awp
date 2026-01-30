@@ -250,7 +250,7 @@ func (m Model) helpBar() string {
 			addAction("a", "add")
 			addAction("e", "edit")
 			addAction("d", "del")
-			addAction("space", "toggle")
+			addAction("x", "toggle")
 			addAction("ctrl+v", "view")
 			addAction("ctrl+f", "search")
 			addAction("ctrl+c", "cal")

@@ -1,7 +1,7 @@
 package ui
 
 import (
-	"fmt"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -10,6 +10,31 @@ import (
 	"awp/pkg/database"
 	"awp/pkg/utils"
 )
+
+func (m *Model) getSelectedItemIndex() int {
+	cursor := m.table.Cursor()
+	rows := m.table.Rows()
+
+	if cursor >= len(rows) {
+		return -1
+	}
+
+	selectedRow := rows[cursor]
+
+	// Items that start with "[" are likely tasks (e.g., "[ ]" or "[x]")
+	if len(selectedRow) > 0 && strings.HasPrefix(selectedRow[0], "[") {
+		// Calculate task index by counting how many task rows are before the cursor
+		taskIdx := 0
+		for i := 0; i < cursor; i++ {
+			if len(rows[i]) > 0 && strings.HasPrefix(rows[i][0], "[") {
+				taskIdx++
+			}
+		}
+		return taskIdx
+	}
+
+	return -1
+}
 
 // Update handles messages and updates the model
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -31,62 +56,50 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.loadTodaysTasks()
 
 			case key.Matches(msg, m.keyMap.ToggleStatus):
-				if len(m.items) > 0 && m.table.Cursor() < len(m.items) {
-					// Update in database
-					idx := m.table.Cursor()
-					if idx < len(m.items) {
+				if len(m.items) > 0 {
+					idx := m.getSelectedItemIndex()
+					if idx != -1 && idx < len(m.items) {
 						m.items[idx].Status = !m.items[idx].Status
-						// Update status using the database function
 						err := database.UpdateTaskStatus(m.db, m.items[idx].ID, m.items[idx].Status)
 						if err != nil {
 							m.err = err
 						} else {
-							// Update the display
-							selectedRow := m.table.SelectedRow()
-							statusPrefix := "[ ]"
-							if m.items[idx].Status {
-								statusPrefix = "[x]"
-							}
-
-							// Extract the text part (everything after the status)
-							text := m.items[idx].Title
-
-							// Highlight project and context tags in the text
-							highlightedText := highlightProjectsAndContexts(text, m.styles)
-
-							// Create the new row with highlighted text
-							selectedRow[0] = fmt.Sprintf("%s %s", statusPrefix, highlightedText)
-							rows := m.table.Rows()
-							rows[m.table.Cursor()] = selectedRow
-							m.table.SetRows(rows)
+							m.loadTasks()
 						}
 					}
 				}
+				return m, nil
 
 			case key.Matches(msg, m.keyMap.AddTask):
 				m.mode = AddMode
 				m.resetInputs()
 
 			case key.Matches(msg, m.keyMap.EditTask):
-				if len(m.items) > 0 && m.table.Cursor() < len(m.items) {
-					m.mode = EditMode
-					m.editingItem = &m.items[m.table.Cursor()]
-					m.resetInputs()
+				if len(m.items) > 0 {
+					idx := m.getSelectedItemIndex()
+					if idx != -1 && idx < len(m.items) {
+						m.mode = EditMode
+						m.editingItem = &m.items[idx]
+						m.resetInputs()
 
-					// Populate form with existing values
-					m.titleInput.SetValue(m.editingItem.Title)
-					m.descInput.SetValue(m.editingItem.Description)
+						// Populate form with existing values
+						m.titleInput.SetValue(m.editingItem.Title)
+						m.descInput.SetValue(m.editingItem.Description)
 
-					// Format and set due date
-					if !m.editingItem.DueDate.IsZero() {
-						m.dueDateInput.SetValue(m.editingItem.DueDate.Format("2006-01-02"))
+						// Format and set due date
+						if !m.editingItem.DueDate.IsZero() {
+							m.dueDateInput.SetValue(m.editingItem.DueDate.Format("2006-01-02"))
+						}
 					}
 				}
 
 			case key.Matches(msg, m.keyMap.DeleteTask):
-				if len(m.items) > 0 && m.table.Cursor() < len(m.items) {
-					m.mode = DeleteConfirmMode
-					m.editingItem = &m.items[m.table.Cursor()]
+				if len(m.items) > 0 {
+					idx := m.getSelectedItemIndex()
+					if idx != -1 && idx < len(m.items) {
+						m.mode = DeleteConfirmMode
+						m.editingItem = &m.items[idx]
+					}
 				}
 
 			case key.Matches(msg, m.keyMap.ToggleViewMode):
@@ -305,7 +318,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.err = err
 					} else {
 						utils.Log("Task deleted successfully")
-						m.loadTodaysTasks()
+						m.loadTasks()
 					}
 				}
 				m.mode = NormalMode

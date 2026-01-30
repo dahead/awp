@@ -14,7 +14,7 @@ type KeyDefinition struct {
 var KeyDefinitions = map[string]KeyDefinition{
 	"ShowHelp":           {"ctrl+b", "show/hide commands"},
 	"QuitApp":            {"q", "quit"},
-	"ToggleStatus":       {"space", "toggle status"},
+	"ToggleStatus":       {"x", "toggle status"},
 	"AddTask":            {"a", "add task"},
 	"EditTask":           {"e", "edit task"},
 	"DeleteTask":         {"d", "delete task"},

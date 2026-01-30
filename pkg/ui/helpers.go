@@ -33,6 +33,14 @@ func (m *Model) loadTasks() {
 
 	// Apply grouping and sorting
 	groupedTasks := m.GroupTasks(items)
+
+	// Re-populate m.items with the tasks in the order they appear in the table
+	var sortedItems []database.TodoItem
+	for _, group := range groupedTasks {
+		sortedItems = append(sortedItems, group.Tasks...)
+	}
+	m.items = sortedItems
+
 	tableRows := []table.Row{}
 
 	for _, group := range groupedTasks {
@@ -250,7 +258,7 @@ func (m *Model) submitForm() {
 		if err != nil {
 			m.err = err
 		} else {
-			m.loadTodaysTasks()
+			m.loadTasks()
 		}
 
 	case EditMode:
@@ -267,7 +275,7 @@ func (m *Model) submitForm() {
 			if err != nil {
 				m.err = err
 			} else {
-				m.loadTodaysTasks()
+				m.loadTasks()
 			}
 		}
 	}

@@ -9,7 +9,7 @@ import (
 	"awp/pkg/keymaps"
 )
 
-// Config holds the application configuration
+// Config holds the application configuration who'd thought
 type Config struct {
 	Database   string            `json:"database"`
 	KeyMap     map[string]string `json:"keymap"`
