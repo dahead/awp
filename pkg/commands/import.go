@@ -30,11 +30,19 @@ func HandleImportCommand(db *sql.DB, filename string) {
 			continue
 		}
 
-		// Check if line contains a date (DD.MM.YYYY format)
-		if dateMatch := regexp.MustCompile(`(\d{2})\.(\d{2})\.(\d{4}):`).FindStringSubmatch(line); dateMatch != nil {
-			day, _ := strconv.Atoi(dateMatch[1])
-			month, _ := strconv.Atoi(dateMatch[2])
-			year, _ := strconv.Atoi(dateMatch[3])
+		// Check if line contains a date (DD.MM.YYYY: or YYYY-MM-DD: format)
+		dateRegex := regexp.MustCompile(`(?:(\d{2})\.(\d{2})\.(\d{4})|(\d{4})-(\d{2})-(\d{2})):?`)
+		if dateMatch := dateRegex.FindStringSubmatch(line); dateMatch != nil {
+			var day, month, year int
+			if dateMatch[1] != "" {
+				day, _ = strconv.Atoi(dateMatch[1])
+				month, _ = strconv.Atoi(dateMatch[2])
+				year, _ = strconv.Atoi(dateMatch[3])
+			} else {
+				year, _ = strconv.Atoi(dateMatch[4])
+				month, _ = strconv.Atoi(dateMatch[5])
+				day, _ = strconv.Atoi(dateMatch[6])
+			}
 			currentDate = time.Date(year, time.Month(month), day, 0, 0, 0, 0, time.UTC)
 			continue
 		}
@@ -46,17 +54,30 @@ func HandleImportCommand(db *sql.DB, filename string) {
 				continue
 			}
 
-			// Extract projects
+			status := false
+			if strings.HasPrefix(taskText, "[x]") {
+				status = true
+				taskText = strings.TrimSpace(strings.TrimPrefix(taskText, "[x]"))
+			} else if strings.HasPrefix(taskText, "[ ]") {
+				status = false
+				taskText = strings.TrimSpace(strings.TrimPrefix(taskText, "[ ]"))
+			}
+
+			// Extract projects and contexts
 			projects := extractProjects(taskText)
+			contexts := extractContexts(taskText)
+
+			// Clean title
 			title := removeProjectTags(taskText)
+			title = removeContextTags(title)
 
 			task := database.TodoItem{
-				Status:      false,
+				Status:      status,
 				Title:       title,
 				Description: taskText,
 				DueDate:     currentDate,
 				Projects:    projects,
-				Contexts:    []string{},
+				Contexts:    contexts,
 			}
 
 			if err := database.AddTask(db, task); err != nil {

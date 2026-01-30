@@ -155,7 +155,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Enter search mode
 				m.mode = SearchMode
 				m.searchInput.Focus()
-				m.searchInput.SetValue("") // Clear previous search
+				// m.searchInput.SetValue("") // Clear previous search - Removed to allow refining search
 				return m, nil
 
 			case key.Matches(msg, m.keyMap.ToggleSortBy):
@@ -180,6 +180,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.viewMode = database.TodayViewMode
 				} else {
 					m.viewMode = database.CalendarViewMode
+					// When entering calendar view, ensure the selected day is valid for the target month
+					lastDay := time.Date(m.calendarMonth.Year(), m.calendarMonth.Month()+1, 0, 0, 0, 0, 0, m.calendarMonth.Location())
+					if m.calendarSelectedDay > lastDay.Day() {
+						m.calendarSelectedDay = lastDay.Day()
+					}
 				}
 				m.loadTasks()
 
@@ -225,6 +230,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					// Move to next month
 					m.calendarMonth = m.calendarMonth.AddDate(0, 1, 0)
 					m.calendarSelectedDay = newDay - lastDay.Day()
+					// Cap to last day of the next month
+					nextMonthLastDay := time.Date(m.calendarMonth.Year(), m.calendarMonth.Month()+1, 0, 0, 0, 0, 0, m.calendarMonth.Location())
+					if m.calendarSelectedDay > nextMonthLastDay.Day() {
+						m.calendarSelectedDay = nextMonthLastDay.Day()
+					}
 				} else {
 					m.calendarSelectedDay = newDay
 				}
@@ -246,7 +256,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Enter search mode when "/" is pressed
 				m.mode = SearchMode
 				m.searchInput.Focus()
-				m.searchInput.SetValue("") // Clear previous search
+				// m.searchInput.SetValue("") // Clear previous search - Removed to allow refining search
 				return m, nil
 			}
 

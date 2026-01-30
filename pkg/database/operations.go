@@ -80,7 +80,7 @@ func LoadTasks(db *sql.DB, whereClause string) ([]TodoItem, error) {
 
 // AddTask inserts a new task into the database
 func AddTask(db *sql.DB, task TodoItem) error {
-	_, err := db.Exec(
+	res, err := db.Exec(
 		`INSERT INTO todos (status, title, description, created, lastmodified, duedate, projects, contexts) 
 		 VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?, ?, ?)`,
 		task.Status,
@@ -90,8 +90,13 @@ func AddTask(db *sql.DB, task TodoItem) error {
 		strings.Join(task.Projects, ","),
 		strings.Join(task.Contexts, ","),
 	)
-	utils.Log("Added task: %s", task.ID)
-	return err
+	if err != nil {
+		return err
+	}
+
+	id, _ := res.LastInsertId()
+	utils.Log("Added task: %d", id)
+	return nil
 }
 
 // UpdateTask updates an existing task in the database
@@ -107,7 +112,7 @@ func UpdateTask(db *sql.DB, task TodoItem) error {
 		strings.Join(task.Contexts, ","),
 		task.ID,
 	)
-	utils.Log("Updated task: %s", task.ID)
+	utils.Log("Updated task: %d", task.ID)
 	return err
 }
 

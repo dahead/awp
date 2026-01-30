@@ -38,15 +38,21 @@ func HandleExportCommand(db *sql.DB, filename, exportType string) {
 		}
 	case "txt":
 		var lines []string
+		var lastDate string
 		for _, task := range tasks {
+			dateStr := task.DueDate.Format("02.01.2006")
+			if dateStr != lastDate {
+				lines = append(lines, fmt.Sprintf("\n%s:", dateStr))
+				lastDate = dateStr
+			}
+
 			status := " "
 			if task.Status {
 				status = "x"
 			}
-			dateStr := task.DueDate.Format("2006-01-02")
-			lines = append(lines, fmt.Sprintf("[%s] %s: %s", status, dateStr, task.Title))
+			lines = append(lines, fmt.Sprintf("- [%s] %s", status, task.Description))
 		}
-		content = []byte(strings.Join(lines, "\n"))
+		content = []byte(strings.TrimSpace(strings.Join(lines, "\n")))
 	default:
 		fmt.Printf("Unknown export type: %s\n", exportType)
 		os.Exit(1)
