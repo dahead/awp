@@ -14,7 +14,7 @@ import (
 )
 
 func main() {
-	utils.Log("=== Starting AWP ===")
+	utils.Log("=== Starting AWP 0.2 ===")
 
 	// Parse command line arguments
 	args := cli.ParseArgs()
