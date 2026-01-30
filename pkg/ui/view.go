@@ -23,13 +23,22 @@ func (m Model) View() string {
 			sb.WriteString(m.renderCalendar())
 
 		default:
-			// Existing table view code
-			baseStyle := lipgloss.NewStyle().
-				BorderStyle(lipgloss.NormalBorder()).
-				BorderForeground(lipgloss.Color(m.styles.BorderColor))
+			// App Title Bar
+			titleBar := lipgloss.NewStyle().
+				Bold(true).
+				Foreground(lipgloss.Color(m.styles.SelectedTextColor)).
+				Background(lipgloss.Color(m.styles.AccentColor)).
+				Padding(0, 1).
+				Render(" AWP - Todo List ")
+
+			sb.WriteString(titleBar)
+			sb.WriteString("\n\n")
+
+			// Table view code - no outer border
+			tableStyle := lipgloss.NewStyle()
 
 			// Table with tasks
-			sb.WriteString(baseStyle.Render(m.table.View()))
+			sb.WriteString(tableStyle.Render(m.table.View()))
 			sb.WriteString("\n")
 
 			// Display view mode and date
@@ -85,17 +94,32 @@ func (m Model) View() string {
 		}
 
 	case AddMode:
-		sb.WriteString(lipgloss.NewStyle().Bold(true).Render("Add New Task"))
+		sb.WriteString(lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color(m.styles.SelectedTextColor)).
+			Background(lipgloss.Color(m.styles.AccentColor)).
+			Padding(0, 1).
+			Render(" Add New Task "))
 		sb.WriteString("\n\n")
 		sb.WriteString(m.renderForm())
 
 	case EditMode:
-		sb.WriteString(lipgloss.NewStyle().Bold(true).Render("Edit Task"))
+		sb.WriteString(lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color(m.styles.SelectedTextColor)).
+			Background(lipgloss.Color(m.styles.AccentColor)).
+			Padding(0, 1).
+			Render(" Edit Task "))
 		sb.WriteString("\n\n")
 		sb.WriteString(m.renderForm())
 
 	case DeleteConfirmMode:
-		sb.WriteString(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(m.styles.ErrorColor)).Render("Delete Task"))
+		sb.WriteString(lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color(m.styles.SelectedTextColor)).
+			Background(lipgloss.Color(m.styles.ErrorColor)).
+			Padding(0, 1).
+			Render(" Delete Task "))
 		sb.WriteString("\n\n")
 
 		if m.editingItem != nil {
@@ -107,7 +131,12 @@ func (m Model) View() string {
 		}
 
 	case SearchMode:
-		sb.WriteString(lipgloss.NewStyle().Bold(true).Render("Search Tasks"))
+		sb.WriteString(lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color(m.styles.SelectedTextColor)).
+			Background(lipgloss.Color(m.styles.AccentColor)).
+			Padding(0, 1).
+			Render(" Search Tasks "))
 		sb.WriteString("\n\n")
 		sb.WriteString("Enter search term to find tasks:")
 		sb.WriteString("\n\n")
@@ -184,18 +213,78 @@ func (m Model) View() string {
 		sb.WriteString(fmt.Sprintf("\n\nError: %v", m.err))
 	}
 
+	// Add help status bar at the bottom
+	sb.WriteString("\n")
+	sb.WriteString(m.helpBar())
+
 	return sb.String()
+}
+
+// helpBar renders a sleek status bar with available actions
+func (m Model) helpBar() string {
+	var actions []string
+
+	// Define styles for keys and descriptions
+	keyStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(m.styles.AccentColor)).
+		Bold(true)
+	descStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(m.styles.NormalTextColor))
+	separatorStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(m.styles.BorderColor))
+
+	separator := separatorStyle.Render(" • ")
+
+	addAction := func(k, desc string) {
+		actions = append(actions, fmt.Sprintf("%s %s", keyStyle.Render(k), descStyle.Render(desc)))
+	}
+
+	switch m.mode {
+	case NormalMode:
+		if m.viewMode == database.CalendarViewMode {
+			addAction("←↑↓→", "nav")
+			addAction("enter", "select")
+			addAction("h", "today")
+			addAction("ctrl+c", "exit cal")
+		} else {
+			addAction("a", "add")
+			addAction("e", "edit")
+			addAction("d", "del")
+			addAction("space", "toggle")
+			addAction("ctrl+v", "view")
+			addAction("ctrl+f", "search")
+			addAction("ctrl+c", "cal")
+			addAction("s/g/o", "sort/grp/ord")
+		}
+		addAction("ctrl+b", "help")
+		addAction("q", "quit")
+
+	case AddMode, EditMode:
+		addAction("tab", "next field")
+		addAction("enter", "save")
+		addAction("esc", "cancel")
+
+	case DeleteConfirmMode:
+		addAction("y", "confirm")
+		addAction("n", "cancel")
+
+	case SearchMode:
+		addAction("enter", "search")
+		addAction("esc", "cancel")
+
+	case HelpViewMode:
+		addAction("ctrl+b/esc", "back")
+		addAction("q", "quit")
+	}
+
+	return strings.Join(actions, separator)
 }
 
 // renderForm renders the input form for adding/editing tasks
 func (m Model) renderForm() string {
 	var sb strings.Builder
 
-	formStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color(m.styles.BorderColor)).
-		Padding(1, 2).
-		Width(m.width - 4)
+	formStyle := lipgloss.NewStyle()
 
 	// Title input
 	sb.WriteString("Title:\n")
@@ -231,8 +320,13 @@ func (m Model) renderCalendar() string {
 	daysInMonth := lastDay.Day()
 
 	// Display the month and year as a header
-	monthYearHeader := firstDay.Format("January 2006")
-	sb.WriteString(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(m.styles.AccentColor)).Render(monthYearHeader))
+	monthYearHeader := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color(m.styles.SelectedTextColor)).
+		Background(lipgloss.Color(m.styles.AccentColor)).
+		Padding(0, 1).
+		Render(" " + firstDay.Format("January 2006") + " ")
+	sb.WriteString(monthYearHeader)
 	sb.WriteString("\n\n")
 
 	// Display the weekday headers

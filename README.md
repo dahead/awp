@@ -49,7 +49,6 @@ Calendar view:
 # Specify a different config
 ./awp --config ~/.config/awp/config.json
 
-
 # Run with verbose output
 ./awp --verbose
 
@@ -72,7 +71,34 @@ Calendar view:
 ./awp --add "Buy milk. @shopping"
 ```
 
-For more options, run ./awp --help or look at ![CLI reference](CLI-Command-Reference.md)
+For more options, run ./awp --help or look at [CLI reference](CLI-Command-Reference.md)
+
+## Cheat Sheet
+
+### CLI Commands
+| Command | Description |
+|---------|-------------|
+| `./awp` | Launch interactive TUI mode |
+| `./awp --add "Task"` | Add a new task |
+| `./awp --date YYYY-MM-DD` | Specify due date for new task |
+| `./awp --import file.txt` | Import tasks from file |
+| `./awp --export file.json` | Export tasks (json/txt) |
+| `./awp --database purge` | Delete tasks (supports filters) |
+
+### TUI Shortcuts
+| Key | Action |
+|-----|--------|
+| `ctrl+b` | Show/hide help |
+| `a` | Add task |
+| `e` / `enter` | Edit task |
+| `d` / `delete` | Delete task |
+| `space` | Toggle task status |
+| `h` | Jump to today |
+| `ctrl+c` | Toggle calendar view |
+| `ctrl+v` | Toggle Today/All tasks view |
+| `ctrl+f` | Search tasks |
+| `s` / `g` / `o` | Cycle Sort / Group / Order |
+| `q` | Quit |
 
 ## Configuration
 

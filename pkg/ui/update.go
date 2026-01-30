@@ -340,5 +340,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 	}
 
+	// tea.ClearScreen()
+
+	// Force table to recalculate its display area
+	// m.table.SetHeight(m.table.Height())
+
 	return m, tea.Batch(cmds...)
 }
